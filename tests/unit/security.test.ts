@@ -82,4 +82,24 @@ describe('isSafeBranchName', () => {
   it('rejects empty string', () => {
     expect(isSafeBranchName('')).toBe(false);
   });
+
+  it('rejects names git would parse as an option', () => {
+    expect(isSafeBranchName('-foo')).toBe(false);
+    expect(isSafeBranchName('--upload-pack')).toBe(false);
+  });
+
+  it('rejects ref-format violations and traversal', () => {
+    expect(isSafeBranchName('a..b')).toBe(false);
+    expect(isSafeBranchName('../etc')).toBe(false);
+    expect(isSafeBranchName('feature/')).toBe(false);
+    expect(isSafeBranchName('feature//x')).toBe(false);
+    expect(isSafeBranchName('feature/.hidden')).toBe(false);
+    expect(isSafeBranchName('topic.lock')).toBe(false);
+    expect(isSafeBranchName('topic.')).toBe(false);
+  });
+
+  it('still accepts dots and dashes inside components', () => {
+    expect(isSafeBranchName('release/v1.2.3-rc.1')).toBe(true);
+    expect(isSafeBranchName('user/feature-x')).toBe(true);
+  });
 });

@@ -2,7 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -35,9 +35,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    networks:
-      - default
-      - devbox_devnet
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:3000/health" ]
       interval: 30s
@@ -50,6 +47,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
+      args:
+        INSTALL_OPENCODE: ${INSTALL_OPENCODE:-false}
     command: node dist/worker.js
     restart: unless-stopped
     env_file:
@@ -64,14 +63,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    networks:
-      - default
-      - devbox_devnet
 
 networks:
   default:
-  devbox_devnet:
-    external: true
 
 volumes:
   redis_data:

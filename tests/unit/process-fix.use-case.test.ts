@@ -115,10 +115,12 @@ describe('ProcessFixUseCase', () => {
     const useCase = new ProcessFixUseCase(deps);
     await useCase.execute(BASE_JOB);
 
-    expect(deps.gitService.clone).toHaveBeenCalledWith(BASE_JOB.cloneUrl, BASE_JOB.headRef, join(workspaceRoot, 'repo'));
+    const auth = { username: 'x-access-token', token: 'test-gh-token' };
+    expect(deps.gitService.clone).toHaveBeenCalledWith(BASE_JOB.cloneUrl, BASE_JOB.headRef, join(workspaceRoot, 'repo'), auth);
     expect(deps.aiProvider.fix).toHaveBeenCalledWith('fix prompt');
     expect(deps.gitService.commitAll).toHaveBeenCalled();
-    expect(deps.gitService.push).toHaveBeenCalledWith(join(workspaceRoot, 'repo'), expect.any(String), BASE_JOB.headRef);
+    // Credentials travel via GitAuth, never inside the push URL.
+    expect(deps.gitService.push).toHaveBeenCalledWith(join(workspaceRoot, 'repo'), BASE_JOB.cloneUrl, BASE_JOB.headRef, auth);
     expect(deps.githubClient.postIssueComment).toHaveBeenCalledWith(
       expect.objectContaining({ owner: 'myorg', repo: 'myrepo', pullNumber: 42 }),
     );
@@ -161,6 +163,49 @@ describe('ProcessFixUseCase', () => {
       expect.objectContaining({ errorMessage: 'clone failed', prNumber: 42 }),
     );
     expect(deps.notifier?.notifyFixComplete).not.toHaveBeenCalled();
+  });
+
+  function failingCloneDeps(): ProcessFixDeps {
+    const deps = makeDeps({
+      workspaceManager: {
+        createWorkspace: vi.fn().mockResolvedValue(workspaceRoot),
+        cleanupWorkspace: vi.fn().mockResolvedValue(undefined),
+        validatePath: vi.fn().mockReturnValue(true),
+      },
+      notifier: {
+        notifyReviewComplete: vi.fn(),
+        notifyReviewFailed: vi.fn(),
+        notifyFixComplete: vi.fn().mockResolvedValue(undefined),
+        notifyFixFailed: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+    vi.mocked(deps.githubClient.listOutstandingBotComments).mockResolvedValue([
+      { filePath: 'src/auth.ts', lineNumber: 1, message: 'Missing validation' },
+    ]);
+    vi.mocked(deps.gitService.clone).mockRejectedValue(new Error('clone failed'));
+    return deps;
+  }
+
+  it('does not send a failure notification while BullMQ will still retry', async () => {
+    const deps = failingCloneDeps();
+    const useCase = new ProcessFixUseCase(deps);
+
+    await expect(useCase.execute(BASE_JOB, { isFinalAttempt: false })).rejects.toThrow('clone failed');
+    expect(deps.notifier?.notifyFixFailed).not.toHaveBeenCalled();
+  });
+
+  it('clones from and pushes to the fork for fork PRs', async () => {
+    const deps = failingCloneDeps();
+    const useCase = new ProcessFixUseCase(deps);
+    const forkJob = { ...BASE_JOB, headCloneUrl: 'https://github.com/contributor/myrepo.git' };
+
+    await expect(useCase.execute(forkJob)).rejects.toThrow('clone failed');
+    expect(deps.gitService.clone).toHaveBeenCalledWith(
+      'https://github.com/contributor/myrepo.git',
+      BASE_JOB.headRef,
+      join(workspaceRoot, 'repo'),
+      { username: 'x-access-token', token: 'test-gh-token' },
+    );
   });
 
   it('ignores AI fixes for files outside the requested scope', async () => {

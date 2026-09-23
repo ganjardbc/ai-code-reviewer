@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import type { IQueue } from '../../domain/interfaces/queue.interface.js';
+import type { AddJobOptions, IQueue } from '../../domain/interfaces/queue.interface.js';
 import { config } from '../../config/index.js';
 import { getRedisConnectionOptions } from './connection.js';
 import { logger } from '../logging/logger.js';
@@ -33,8 +33,8 @@ class ReviewQueue implements IQueue {
     });
   }
 
-  async addJob(name: string, data: Record<string, unknown>): Promise<string> {
-    const job = await this.queue.add(name, data);
+  async addJob(name: string, data: Record<string, unknown>, options: AddJobOptions = {}): Promise<string> {
+    const job = await this.queue.add(name, data, options.jobId ? { jobId: options.jobId } : undefined);
     const id = job.id ?? 'unknown';
     logger.info('Job enqueued', undefined, { jobId: id, name });
     return id;

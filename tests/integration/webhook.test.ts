@@ -3,6 +3,8 @@ import { createHmac } from 'node:crypto';
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import supertest from 'supertest';
 import { reviewQueue } from '../../src/infrastructure/queue/client.js';
+import { githubService } from '../../src/infrastructure/vcs/github.service.js';
+import { gitlabService } from '../../src/infrastructure/vcs/gitlab.service.js';
 
 // Mock queue so no real Redis needed
 vi.mock('../../src/infrastructure/queue/client.js', () => ({
@@ -29,7 +31,9 @@ vi.mock('../../src/infrastructure/vcs/github.service.js', () => ({
       baseRef: 'main',
       headSha: 'abc1234567890abcdef',
       cloneUrl: 'https://github.com/myorg/myrepo.git',
+      state: 'open',
     }),
+    hasWriteAccess: vi.fn().mockResolvedValue(true),
   },
 }));
 
@@ -40,6 +44,7 @@ vi.mock('../../src/infrastructure/vcs/gitlab.service.js', () => ({
       startSha: 'start456',
       headSha: 'def567890abcdef1234',
     }),
+    hasDeveloperAccess: vi.fn().mockResolvedValue(true),
   },
 }));
 
@@ -118,6 +123,46 @@ describe('Webhook Integration', () => {
       expect(res.body.jobId).toBeDefined();
     });
 
+    it('uses a jobId derived from the head SHA so redeliveries deduplicate', async () => {
+      const body = JSON.stringify(GITHUB_PAYLOAD);
+      await request
+        .post('/webhooks/github')
+        .set('Content-Type', 'application/json')
+        .set('X-Hub-Signature-256', githubSig(body))
+        .send(body);
+
+      expect(reviewQueue.addJob).toHaveBeenLastCalledWith(
+        'github-review',
+        expect.objectContaining({ jobId: 'github-review-myorg-myrepo-42-abc1234567890abcdef', trigger: 'event' }),
+        { jobId: 'github-review-myorg-myrepo-42-abc1234567890abcdef' },
+      );
+    });
+
+    it('records the fork clone URL for PRs from forks', async () => {
+      const payload = {
+        ...GITHUB_PAYLOAD,
+        pull_request: {
+          ...GITHUB_PAYLOAD.pull_request,
+          head: { ...GITHUB_PAYLOAD.pull_request.head, repo: { clone_url: 'https://github.com/contributor/myrepo.git' } },
+        },
+      };
+      const body = JSON.stringify(payload);
+      await request
+        .post('/webhooks/github')
+        .set('Content-Type', 'application/json')
+        .set('X-Hub-Signature-256', githubSig(body))
+        .send(body);
+
+      expect(reviewQueue.addJob).toHaveBeenLastCalledWith(
+        'github-review',
+        expect.objectContaining({
+          cloneUrl: 'https://github.com/myorg/myrepo.git',
+          headCloneUrl: 'https://github.com/contributor/myrepo.git',
+        }),
+        expect.anything(),
+      );
+    });
+
     it('returns 401 for missing signature', async () => {
       const res = await request
         .post('/webhooks/github')
@@ -187,6 +232,19 @@ describe('Webhook Integration', () => {
       expect(res.status).toBe(202);
       expect(res.body.status).toBe('enqueued');
       expect(res.body.jobId).toBeDefined();
+    });
+
+    it('never embeds the access token in the enqueued clone URL', async () => {
+      await request
+        .post('/webhooks/gitlab')
+        .set('Content-Type', 'application/json')
+        .set('X-Gitlab-Token', GITLAB_SECRET)
+        .send(JSON.stringify(GITLAB_PAYLOAD));
+
+      const data = vi.mocked(reviewQueue.addJob).mock.lastCall?.[1] as { cloneUrl: string; jobId: string };
+      expect(data.cloneUrl).toBe('https://gitlab.com/myorg/myrepo.git');
+      expect(JSON.stringify(data)).not.toContain('test-gl-token');
+      expect(data.jobId).toBe('gitlab-review-123-5-def567890abcdef1234');
     });
 
     it('returns 401 for wrong token', async () => {
@@ -262,6 +320,7 @@ describe('Webhook Integration', () => {
           baseSha: 'base123',
           startSha: 'start456',
         }),
+        expect.anything(),
       );
     });
   });
@@ -273,7 +332,7 @@ describe('Webhook Integration', () => {
         number: 42,
         pull_request: {},
       },
-      comment: { body: '/fix' },
+      comment: { id: 9001, body: '/fix', user: { login: 'maintainer' } },
       repository: {
         name: 'myrepo',
         owner: { login: 'myorg' },
@@ -294,12 +353,35 @@ describe('Webhook Integration', () => {
       expect(res.body.status).toBe('enqueued');
       expect(reviewQueue.addJob).toHaveBeenCalledWith(
         'github-fix',
-        expect.objectContaining({ jobType: 'fix', provider: 'github', prNumber: 42 }),
+        expect.objectContaining({ jobType: 'fix', trigger: 'comment', provider: 'github', prNumber: 42 }),
+        { jobId: 'github-fix-comment-9001' },
       );
     });
 
+    it('ignores commands on a closed pull request', async () => {
+      vi.mocked(githubService.getPullRequest).mockResolvedValueOnce({
+        headRef: 'feature-x',
+        baseRef: 'main',
+        headSha: 'abc1234567890abcdef',
+        cloneUrl: 'https://github.com/myorg/myrepo.git',
+        state: 'closed',
+      });
+      vi.mocked(reviewQueue.addJob).mockClear();
+      const body = JSON.stringify(ISSUE_COMMENT_PAYLOAD);
+      const res = await request
+        .post('/webhooks/github')
+        .set('Content-Type', 'application/json')
+        .set('X-GitHub-Event', 'issue_comment')
+        .set('X-Hub-Signature-256', githubSig(body))
+        .send(body);
+
+      expect(res.status).toBe(200);
+      expect(res.body.reason).toBe('Pull request is not open');
+      expect(reviewQueue.addJob).not.toHaveBeenCalled();
+    });
+
     it('enqueues a review job for /review comment', async () => {
-      const payload = { ...ISSUE_COMMENT_PAYLOAD, comment: { body: '/review' } };
+      const payload = { ...ISSUE_COMMENT_PAYLOAD, comment: { ...ISSUE_COMMENT_PAYLOAD.comment, body: '/review' } };
       const body = JSON.stringify(payload);
       const res = await request
         .post('/webhooks/github')
@@ -312,11 +394,12 @@ describe('Webhook Integration', () => {
       expect(reviewQueue.addJob).toHaveBeenCalledWith(
         'github-review',
         expect.objectContaining({ jobType: 'review', provider: 'github' }),
+        { jobId: 'github-review-comment-9001' },
       );
     });
 
     it('ignores comments without /review or /fix', async () => {
-      const payload = { ...ISSUE_COMMENT_PAYLOAD, comment: { body: 'looks good to me' } };
+      const payload = { ...ISSUE_COMMENT_PAYLOAD, comment: { ...ISSUE_COMMENT_PAYLOAD.comment, body: 'looks good to me' } };
       const body = JSON.stringify(payload);
       const res = await request
         .post('/webhooks/github')
@@ -328,17 +411,53 @@ describe('Webhook Integration', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('ignored');
     });
+
+    it('ignores commands from commenters without write access', async () => {
+      vi.mocked(githubService.hasWriteAccess).mockResolvedValueOnce(false);
+      vi.mocked(reviewQueue.addJob).mockClear();
+      const payload = { ...ISSUE_COMMENT_PAYLOAD, comment: { id: 9002, body: '/fix', user: { login: 'drive-by' } } };
+      const body = JSON.stringify(payload);
+      const res = await request
+        .post('/webhooks/github')
+        .set('Content-Type', 'application/json')
+        .set('X-GitHub-Event', 'issue_comment')
+        .set('X-Hub-Signature-256', githubSig(body))
+        .send(body);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ignored');
+      expect(githubService.hasWriteAccess).toHaveBeenCalledWith('myorg', 'myrepo', 'drive-by');
+      expect(reviewQueue.addJob).not.toHaveBeenCalled();
+    });
+
+    it('returns 500 and enqueues nothing when the permission check fails', async () => {
+      vi.mocked(githubService.hasWriteAccess).mockRejectedValueOnce(new Error('rate limited'));
+      vi.mocked(reviewQueue.addJob).mockClear();
+      const body = JSON.stringify(ISSUE_COMMENT_PAYLOAD);
+      const res = await request
+        .post('/webhooks/github')
+        .set('Content-Type', 'application/json')
+        .set('X-GitHub-Event', 'issue_comment')
+        .set('X-Hub-Signature-256', githubSig(body))
+        .send(body);
+
+      expect(res.status).toBe(500);
+      expect(reviewQueue.addJob).not.toHaveBeenCalled();
+    });
   });
 
   describe('POST /webhooks/gitlab — /fix comment trigger', () => {
     const NOTE_HOOK_PAYLOAD = {
       object_kind: 'note',
       object_attributes: {
+        id: 555,
         note: '/fix',
         noteable_type: 'MergeRequest',
       },
+      user: { id: 77 },
       merge_request: {
         iid: 5,
+        state: 'opened',
         source_branch: 'feature-y',
         target_branch: 'main',
         last_commit: { id: 'def567890abcdef1234' },
@@ -363,7 +482,51 @@ describe('Webhook Integration', () => {
       expect(res.status).toBe(202);
       expect(reviewQueue.addJob).toHaveBeenCalledWith(
         'gitlab-fix',
-        expect.objectContaining({ jobType: 'fix', provider: 'gitlab', mrIid: 5 }),
+        expect.objectContaining({
+          jobType: 'fix',
+          trigger: 'comment',
+          provider: 'gitlab',
+          mrIid: 5,
+          cloneUrl: 'https://gitlab.com/myorg/myrepo.git',
+        }),
+        { jobId: 'gitlab-fix-comment-555' },
+      );
+    });
+
+    it('ignores notes on a merged merge request', async () => {
+      vi.mocked(reviewQueue.addJob).mockClear();
+      const payload = { ...NOTE_HOOK_PAYLOAD, merge_request: { ...NOTE_HOOK_PAYLOAD.merge_request, state: 'merged' } };
+      const res = await request
+        .post('/webhooks/gitlab')
+        .set('Content-Type', 'application/json')
+        .set('X-Gitlab-Token', GITLAB_SECRET)
+        .set('X-Gitlab-Event', 'Note Hook')
+        .send(JSON.stringify(payload));
+
+      expect(res.status).toBe(200);
+      expect(res.body.reason).toBe('Merge request is not open');
+      expect(reviewQueue.addJob).not.toHaveBeenCalled();
+    });
+
+    it('passes the fork URL separately for fork merge requests', async () => {
+      const payload = {
+        ...NOTE_HOOK_PAYLOAD,
+        merge_request: { ...NOTE_HOOK_PAYLOAD.merge_request, source: { git_http_url: 'https://gitlab.com/contributor/myrepo.git' } },
+      };
+      await request
+        .post('/webhooks/gitlab')
+        .set('Content-Type', 'application/json')
+        .set('X-Gitlab-Token', GITLAB_SECRET)
+        .set('X-Gitlab-Event', 'Note Hook')
+        .send(JSON.stringify(payload));
+
+      expect(reviewQueue.addJob).toHaveBeenLastCalledWith(
+        'gitlab-fix',
+        expect.objectContaining({
+          cloneUrl: 'https://gitlab.com/myorg/myrepo.git',
+          headCloneUrl: 'https://gitlab.com/contributor/myrepo.git',
+        }),
+        expect.anything(),
       );
     });
 
@@ -379,5 +542,22 @@ describe('Webhook Integration', () => {
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('ignored');
     });
+
+    it('ignores notes from users without Developer access', async () => {
+      vi.mocked(gitlabService.hasDeveloperAccess).mockResolvedValueOnce(false);
+      vi.mocked(reviewQueue.addJob).mockClear();
+      const res = await request
+        .post('/webhooks/gitlab')
+        .set('Content-Type', 'application/json')
+        .set('X-Gitlab-Token', GITLAB_SECRET)
+        .set('X-Gitlab-Event', 'Note Hook')
+        .send(JSON.stringify(NOTE_HOOK_PAYLOAD));
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ignored');
+      expect(gitlabService.hasDeveloperAccess).toHaveBeenCalledWith(123, 77);
+      expect(reviewQueue.addJob).not.toHaveBeenCalled();
+    });
   });
 });
+

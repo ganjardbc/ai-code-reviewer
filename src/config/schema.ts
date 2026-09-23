@@ -50,6 +50,9 @@ export const configSchema = z.object({
   ENABLE_FIX_BY_COMMENT: boolEnvVar('false'),
 
   WORKSPACE_DIR: z.string().default('/tmp/ai-reviewer/workspace'),
+  WORKER_CONCURRENCY: z.coerce.number().int().positive().default(3),
+  // Per git command. Clones and `fetch --unshallow` of large repos need well over a minute.
+  GIT_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
 
   QUEUE_JOB_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   QUEUE_MAX_JOBS_RETAINED: z.coerce.number().int().positive().default(100),

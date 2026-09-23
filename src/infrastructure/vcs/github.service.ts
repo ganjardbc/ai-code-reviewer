@@ -158,11 +158,14 @@ export class GithubService implements IGithubClient {
 
   async getPullRequest(owner: string, repo: string, pullNumber: number): Promise<PullRequestInfo> {
     const { data } = await this.octokit.pulls.get({ owner, repo, pull_number: pullNumber });
+    const headCloneUrl = data.head.repo?.clone_url;
     return {
       headRef: data.head.ref,
       baseRef: data.base.ref,
       headSha: data.head.sha,
       cloneUrl: data.base.repo.clone_url,
+      headCloneUrl: headCloneUrl && headCloneUrl !== data.base.repo.clone_url ? headCloneUrl : undefined,
+      state: data.state,
     };
   }
 
@@ -214,6 +217,17 @@ export class GithubService implements IGithubClient {
       issue_number: pullNumber,
       body,
     });
+  }
+
+  async hasWriteAccess(owner: string, repo: string, username: string): Promise<boolean> {
+    try {
+      const { data } = await this.octokit.repos.getCollaboratorPermissionLevel({ owner, repo, username });
+      return data.permission === 'admin' || data.permission === 'write';
+    } catch (err) {
+      // 404 = not a collaborator at all; anything else is a real failure.
+      if ((err as { status?: number }).status === 404) return false;
+      throw err;
+    }
   }
 }
 

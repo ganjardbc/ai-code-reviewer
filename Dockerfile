@@ -32,7 +32,13 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
   git ca-certificates wget \
   && rm -rf /var/lib/apt/lists/*
 
-
+# The opencode CLI is only needed when AI_RUNNER=opencode; opt in with
+# --build-arg INSTALL_OPENCODE=true (pin OPENCODE_VERSION for reproducible builds).
+ARG INSTALL_OPENCODE=false
+ARG OPENCODE_VERSION=latest
+RUN if [ "$INSTALL_OPENCODE" = "true" ]; then \
+    npm install -g "opencode-ai@${OPENCODE_VERSION}" && npm cache clean --force; \
+  fi
 
 RUN groupadd -r appgroup && useradd -r -m -d /home/appuser -g appgroup appuser
 

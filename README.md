@@ -49,7 +49,7 @@ Or with Docker Compose:
 docker compose up
 ```
 
-> **Note**: The `devbox_devnet` external network is referenced in `docker-compose.yml`. Remove or replace it if you don't use devbox.
+> **Note**: To also attach `api`/`worker` to the external `devbox_devnet` network (e.g. for Nginx Proxy Manager), add the overlay: `docker compose -f docker-compose.yml -f docker-compose.devbox.yml up`. `deploy.sh` does this automatically when that network exists.
 
 ## Configuration
 
@@ -108,7 +108,7 @@ Spawns the [`opencode`](https://opencode.ai) CLI locally. Install it first:
 npm install -g opencode-ai
 ```
 
-Set `AI_RUNNER=opencode` in your `.env`.
+Set `AI_RUNNER=opencode` in your `.env`. The Docker image doesn't include the CLI by default — build the worker with `INSTALL_OPENCODE=true` (e.g. `INSTALL_OPENCODE=true docker compose build worker`). The worker exits at startup if the CLI can't be run.
 
 ## Production build
 

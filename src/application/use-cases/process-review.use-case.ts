@@ -3,10 +3,11 @@ import type { IAiProvider } from '../../domain/interfaces/ai-provider.interface.
 import type { IPromptBuilder } from '../services/prompt.service.js';
 import type { IOutputParser } from '../services/parser.service.js';
 import type { IGithubClient, IGitlabClient } from '../../domain/interfaces/vcs-client.interface.js';
-import type { JobPayload } from '../../domain/interfaces/queue.interface.js';
+import type { JobContext, JobPayload } from '../../domain/interfaces/queue.interface.js';
 import type { INotifier } from '../../domain/interfaces/notifier.interface.js';
+import { isPermanentError } from '../../domain/errors/app-errors.js';
 import { logger } from '../../infrastructure/logging/logger.js';
-import { buildPrUrl, repoLabel } from './job-info.util.js';
+import { buildPrUrl, gitAuthFor, headFetchRef, repoLabel } from './job-info.util.js';
 
 export interface ProcessReviewDeps {
   gitService: IGitService;
@@ -26,7 +27,7 @@ function ms(start: bigint): number {
 export class ProcessReviewUseCase {
   constructor(private readonly deps: ProcessReviewDeps) {}
 
-  async execute(job: JobPayload): Promise<void> {
+  async execute(job: JobPayload, ctx: JobContext = { isFinalAttempt: true }): Promise<void> {
     const {
       gitService,
       workspaceManager,
@@ -38,6 +39,11 @@ export class ProcessReviewUseCase {
     } = this.deps;
 
     const jobStart = process.hrtime.bigint();
+
+    const current = await this.resolveCurrentHead(job, githubClient, gitlabClient);
+    if (current === 'stale') return;
+    job = current;
+
     const workspacePath = await workspaceManager.createWorkspace();
     const repoPath = `${workspacePath}/repo`;
 
@@ -51,12 +57,16 @@ export class ProcessReviewUseCase {
 
     try {
       const cloneStart = process.hrtime.bigint();
-      await gitService.clone(job.cloneUrl, job.headRef, repoPath);
+      // Clone the base repo and fetch the head via the platform's PR/MR ref:
+      // works for fork PRs without needing (or having) access to the fork.
+      const auth = gitAuthFor(job);
+      await gitService.clone(job.cloneUrl, job.baseRef, repoPath, auth);
+      await gitService.fetchRef(repoPath, headFetchRef(job), auth);
       await gitService.checkout(repoPath, job.headSha);
       logger.info('Git clone+checkout done', undefined, { jobId: job.jobId, durationMs: ms(cloneStart) });
 
       const diffStart = process.hrtime.bigint();
-      const diff = await gitService.generateDiff(repoPath, job.baseRef, job.headRef);
+      const diff = await gitService.generateDiff(repoPath, job.baseRef, auth);
       const diffBytes = Buffer.byteLength(diff, 'utf-8');
       logger.info('Diff generated', undefined, { jobId: job.jobId, diffBytes, durationMs: ms(diffStart) });
 
@@ -149,17 +159,74 @@ export class ProcessReviewUseCase {
         jobId: job.jobId,
         totalDurationMs: ms(jobStart),
       });
-      await notifier?.notifyReviewFailed({
-        jobId: job.jobId,
-        provider: job.provider,
-        repoLabel: repoLabel(job),
-        prNumber: (job.prNumber ?? job.mrIid) ?? 0,
-        errorMessage,
-      });
+      // Stay quiet on attempts BullMQ will retry, or one flaky failure
+      // would produce a "failed" notification per attempt.
+      if (ctx.isFinalAttempt || isPermanentError(err)) {
+        await notifier?.notifyReviewFailed({
+          jobId: job.jobId,
+          provider: job.provider,
+          repoLabel: repoLabel(job),
+          prNumber: (job.prNumber ?? job.mrIid) ?? 0,
+          errorMessage,
+        });
+      }
       throw err;
     } finally {
       await workspaceManager.cleanupWorkspace(workspacePath);
     }
+  }
+
+  /**
+   * Returns the job to run against the PR/MR's current head, or 'stale' when
+   * an event-triggered job has been superseded by a newer push (that push
+   * enqueued its own job). Comment-triggered jobs are retargeted to the new
+   * head instead, since nothing else will answer the /review request.
+   * Lookup failures fall through to the enqueued SHA rather than failing.
+   */
+  private async resolveCurrentHead(
+    job: JobPayload,
+    githubClient: IGithubClient,
+    gitlabClient: IGitlabClient,
+  ): Promise<JobPayload | 'stale'> {
+    let latest: { headSha: string; baseSha?: string; startSha?: string };
+    try {
+      if (job.provider === 'github' && job.repoOwner && job.repoName && job.prNumber) {
+        latest = await githubClient.getPullRequest(job.repoOwner, job.repoName, job.prNumber);
+      } else if (job.provider === 'gitlab' && job.projectId && job.mrIid) {
+        latest = await gitlabClient.getMergeRequest(job.projectId, job.mrIid);
+      } else {
+        return job;
+      }
+    } catch (err) {
+      logger.warn('Could not verify PR/MR head, reviewing enqueued commit', undefined, {
+        jobId: job.jobId,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      return job;
+    }
+
+    if (latest.headSha === job.headSha) return job;
+
+    if (job.trigger !== 'comment') {
+      logger.info('Skipping stale review: PR/MR head moved since enqueue', undefined, {
+        jobId: job.jobId,
+        enqueuedSha: job.headSha,
+        currentSha: latest.headSha,
+      });
+      return 'stale';
+    }
+
+    logger.info('Retargeting comment-triggered review to current PR/MR head', undefined, {
+      jobId: job.jobId,
+      enqueuedSha: job.headSha,
+      currentSha: latest.headSha,
+    });
+    return {
+      ...job,
+      headSha: latest.headSha,
+      baseSha: latest.baseSha ?? job.baseSha,
+      startSha: latest.startSha ?? job.startSha,
+    };
   }
 
   private async postNoIssuesFeedback(

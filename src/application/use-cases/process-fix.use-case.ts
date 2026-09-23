@@ -4,11 +4,11 @@ import type { IGitService, IWorkspaceManager } from '../../domain/interfaces/git
 import type { IAiProvider } from '../../domain/interfaces/ai-provider.interface.js';
 import type { IFixPromptBuilder, FixFileInput } from '../services/prompt.service.js';
 import type { IGithubClient, IGitlabClient, OutstandingComment } from '../../domain/interfaces/vcs-client.interface.js';
-import type { JobPayload } from '../../domain/interfaces/queue.interface.js';
+import type { JobContext, JobPayload } from '../../domain/interfaces/queue.interface.js';
 import type { INotifier } from '../../domain/interfaces/notifier.interface.js';
-import { config } from '../../config/index.js';
+import { isPermanentError } from '../../domain/errors/app-errors.js';
 import { logger } from '../../infrastructure/logging/logger.js';
-import { buildPrUrl, repoLabel } from './job-info.util.js';
+import { buildPrUrl, gitAuthFor, repoLabel } from './job-info.util.js';
 
 export interface ProcessFixDeps {
   gitService: IGitService;
@@ -22,13 +22,6 @@ export interface ProcessFixDeps {
 
 function ms(start: bigint): number {
   return Math.round(Number(process.hrtime.bigint() - start) / 1e6);
-}
-
-function buildGithubPushUrl(cloneUrl: string, token: string): string {
-  const url = new URL(cloneUrl);
-  url.username = 'x-access-token';
-  url.password = token;
-  return url.toString();
 }
 
 async function resolveWithinRepo(repoPath: string, filePath: string): Promise<string | undefined> {
@@ -54,7 +47,7 @@ async function resolveWithinRepo(repoPath: string, filePath: string): Promise<st
 export class ProcessFixUseCase {
   constructor(private readonly deps: ProcessFixDeps) {}
 
-  async execute(job: JobPayload): Promise<void> {
+  async execute(job: JobPayload, ctx: JobContext = { isFinalAttempt: true }): Promise<void> {
     const { gitService, workspaceManager, aiProvider, fixPromptBuilder, githubClient, gitlabClient, notifier } = this.deps;
 
     const jobStart = process.hrtime.bigint();
@@ -77,7 +70,11 @@ export class ProcessFixUseCase {
         return;
       }
 
-      await gitService.clone(job.cloneUrl, job.headRef, repoPath);
+      // Fixes are pushed to the head branch, which lives in the fork for
+      // fork PRs/MRs (needs "allow edits from maintainers" on the platform).
+      const headRepoUrl = job.headCloneUrl ?? job.cloneUrl;
+      const auth = gitAuthFor(job);
+      await gitService.clone(headRepoUrl, job.headRef, repoPath, auth);
 
       const fixInputs = await this.readAffectedFiles(repoPath, outstanding);
       if (fixInputs.length === 0) {
@@ -138,11 +135,7 @@ export class ProcessFixUseCase {
         return;
       }
 
-      const pushUrl = job.provider === 'github'
-        ? buildGithubPushUrl(job.cloneUrl, config.GITHUB_ACCESS_TOKEN)
-        : job.cloneUrl;
-
-      await gitService.push(repoPath, pushUrl, job.headRef);
+      await gitService.push(repoPath, headRepoUrl, job.headRef, auth);
 
       // The fix is already committed and pushed at this point — a failure
       // in the summary comment or notification must not be allowed to
@@ -175,13 +168,17 @@ export class ProcessFixUseCase {
         jobId: job.jobId,
         totalDurationMs: ms(jobStart),
       });
-      await notifier?.notifyFixFailed({
-        jobId: job.jobId,
-        provider: job.provider,
-        repoLabel: repoLabel(job),
-        prNumber: (job.prNumber ?? job.mrIid) ?? 0,
-        errorMessage,
-      });
+      // Stay quiet on attempts BullMQ will retry, or one flaky failure
+      // would produce a "failed" notification per attempt.
+      if (ctx.isFinalAttempt || isPermanentError(err)) {
+        await notifier?.notifyFixFailed({
+          jobId: job.jobId,
+          provider: job.provider,
+          repoLabel: repoLabel(job),
+          prNumber: (job.prNumber ?? job.mrIid) ?? 0,
+          errorMessage,
+        });
+      }
       throw err;
     } finally {
       await workspaceManager.cleanupWorkspace(workspacePath);
