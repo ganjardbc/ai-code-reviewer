@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import type { IGitService } from '../../domain/interfaces/git.interface.js';
+import type { GitAuth, IGitService } from '../../domain/interfaces/git.interface.js';
 import { config } from '../../config/index.js';
 import { GitError, ValidationError } from '../../domain/errors/app-errors.js';
 import { logger } from '../logging/logger.js';
@@ -19,6 +19,39 @@ function assertInsideWorkspace(dirPath: string): void {
   if (!resolved.startsWith(WORKSPACE_ROOT + '/') && resolved !== WORKSPACE_ROOT) {
     throw new ValidationError(`Path escape attempt detected: ${dirPath}`);
   }
+}
+
+const SAFE_REF_PATTERN = /^refs\/[A-Za-z0-9._\/-]+$/;
+const HEAD_TRACKING_REF = 'refs/remotes/origin/pr-head';
+
+// Scrubs `scheme://user:pass@` from git output before it lands in errors,
+// logs or Telegram — covers jobs enqueued before tokens left the URL.
+function redactUrlCredentials(text: string): string {
+  return text.replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***@');
+}
+
+/**
+ * Supplies credentials through GIT_CONFIG_{COUNT,KEY_n,VALUE_n} (git >= 2.31)
+ * rather than the URL or `-c` flags, so the token stays out of argv (visible
+ * in `ps`), `.git/config`, and git's own error messages. The header is scoped
+ * to the remote's origin so it is never sent to any other host.
+ */
+function authEnv(remoteUrl: string, auth: GitAuth | undefined): NodeJS.ProcessEnv {
+  if (!auth) return {};
+  let scope: string;
+  try {
+    const url = new URL(remoteUrl);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return {};
+    scope = `${url.protocol}//${url.host}/`;
+  } catch {
+    return {};
+  }
+  const basic = Buffer.from(`${auth.username}:${auth.token}`).toString('base64');
+  return {
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: `http.${scope}.extraHeader`,
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${basic}`,
+  };
 }
 
 function redactCredentials(url: string): string {
@@ -41,20 +74,26 @@ function isNonFastForwardError(err: unknown): boolean {
   return err instanceof GitError && /non-fast-forward|fetch first/i.test(err.message);
 }
 
-async function ensureFullHistory(targetDir: string): Promise<void> {
+async function originAuthEnv(targetDir: string, auth: GitAuth | undefined): Promise<NodeJS.ProcessEnv> {
+  if (!auth) return {};
+  const originUrl = (await runGit(['remote', 'get-url', 'origin'], targetDir)).trim();
+  return authEnv(originUrl, auth);
+}
+
+async function ensureFullHistory(targetDir: string, auth?: GitAuth): Promise<void> {
   const isShallow = (await runGit(['rev-parse', '--is-shallow-repository'], targetDir)).trim();
   if (isShallow === 'true') {
-    await runGit(['fetch', '--unshallow', 'origin'], targetDir);
+    await runGit(['fetch', '--unshallow', 'origin'], targetDir, await originAuthEnv(targetDir, auth));
   }
 }
 
-function runGit(args: string[], cwd: string): Promise<string> {
+function runGit(args: string[], cwd: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn('git', args, {
       cwd,
-      env: GIT_ENV,
+      env: { ...GIT_ENV, ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 60_000,
+      timeout: config.GIT_TIMEOUT_MS,
     });
 
     const out: Buffer[] = [];
@@ -67,7 +106,7 @@ function runGit(args: string[], cwd: string): Promise<string> {
       if (code === 0) {
         resolve(Buffer.concat(out).toString('utf-8'));
       } else {
-        const msg = Buffer.concat(err).toString('utf-8').trim();
+        const msg = redactUrlCredentials(Buffer.concat(err).toString('utf-8').trim());
         reject(new GitError(`git ${args[0]} failed (${code ?? signal}): ${msg}`));
       }
     });
@@ -79,7 +118,7 @@ function runGit(args: string[], cwd: string): Promise<string> {
 }
 
 export class GitService implements IGitService {
-  async clone(repoUrl: string, branch: string, targetDir: string): Promise<void> {
+  async clone(repoUrl: string, branch: string, targetDir: string, auth?: GitAuth): Promise<void> {
     assertInsideWorkspace(targetDir);
 
     logger.info('Cloning repository', undefined, { repoUrl: redactCredentials(repoUrl), branch });
@@ -95,9 +134,30 @@ export class GitService implements IGitService {
         targetDir,
       ],
       WORKSPACE_ROOT,
+      authEnv(repoUrl, auth),
     );
 
     logger.debug('Clone complete', undefined, { targetDir });
+  }
+
+  async fetchRef(targetDir: string, ref: string, auth?: GitAuth): Promise<void> {
+    assertInsideWorkspace(targetDir);
+
+    if (!SAFE_REF_PATTERN.test(ref) || ref.includes('..')) {
+      throw new ValidationError(`Invalid ref: ${ref}`);
+    }
+
+    // Registering the refspec (not just fetching it once) makes a later
+    // `fetch --unshallow origin` deepen this ref's history too.
+    const refspec = `+${ref}:${HEAD_TRACKING_REF}`;
+    await runGit(['config', '--add', 'remote.origin.fetch', refspec], targetDir);
+
+    logger.debug('Fetching ref', undefined, { ref });
+    await runGit(
+      ['fetch', `--depth=${CLONE_DEPTH}`, 'origin', refspec],
+      targetDir,
+      await originAuthEnv(targetDir, auth),
+    );
   }
 
   async checkout(targetDir: string, commitSha: string): Promise<void> {
@@ -111,35 +171,36 @@ export class GitService implements IGitService {
     await runGit(['checkout', '--detach', commitSha], targetDir);
   }
 
-  async generateDiff(targetDir: string, baseBranch: string, headBranch: string): Promise<string> {
+  async generateDiff(targetDir: string, baseBranch: string, auth?: GitAuth): Promise<string> {
+    // Diffs against HEAD (the checked-out job.headSha), never the head branch
+    // name: the branch may have advanced since the webhook fired, and review
+    // comments are anchored to headSha, so line numbers must come from it.
     assertInsideWorkspace(targetDir);
 
     logger.debug('Fetching base branch for diff', undefined, { baseBranch });
 
-    // Allow fetching any branch (--single-branch restricts refspecs by default)
+    // Explicit refspec: --single-branch clones don't track other branches,
+    // and `remote set-branches` would drop the refspec fetchRef registered.
+    const env = await originAuthEnv(targetDir, auth);
     await runGit(
-      ['remote', 'set-branches', 'origin', '*'],
+      ['fetch', `--depth=${CLONE_DEPTH}`, 'origin', `+refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch}`],
       targetDir,
-    );
-
-    await runGit(
-      ['fetch', 'origin', baseBranch, `--depth=${CLONE_DEPTH}`],
-      targetDir,
+      env,
     );
 
     try {
       return await runGit(
-        ['diff', `origin/${baseBranch}...${headBranch}`, '--', '.'],
+        ['diff', `origin/${baseBranch}...HEAD`, '--', '.'],
         targetDir,
       );
     } catch (err) {
       // Shallow history (CLONE_DEPTH) can leave head/base without a common
       // ancestor for branches that diverged further back. Deepen to full
       // history and retry once rather than failing or producing a bad diff.
-      logger.warn('Diff failed at shallow depth, retrying with full history', undefined, { baseBranch, headBranch });
-      await ensureFullHistory(targetDir);
+      logger.warn('Diff failed at shallow depth, retrying with full history', undefined, { baseBranch });
+      await ensureFullHistory(targetDir, auth);
       return runGit(
-        ['diff', `origin/${baseBranch}...${headBranch}`, '--', '.'],
+        ['diff', `origin/${baseBranch}...HEAD`, '--', '.'],
         targetDir,
       ).catch(() => {
         throw err;
@@ -172,19 +233,20 @@ export class GitService implements IGitService {
     return true;
   }
 
-  async push(targetDir: string, remoteUrl: string, branch: string): Promise<void> {
+  async push(targetDir: string, remoteUrl: string, branch: string, auth?: GitAuth): Promise<void> {
     assertInsideWorkspace(targetDir);
+    const env = authEnv(remoteUrl, auth);
 
     try {
-      await this.attemptPush(targetDir, remoteUrl, branch);
+      await this.attemptPush(targetDir, remoteUrl, branch, env);
     } catch (err) {
       if (!isNonFastForwardError(err)) {
         throw err;
       }
 
       logger.warn('Push rejected — branch moved since clone, rebasing onto latest remote commit', undefined, { branch });
-      await ensureFullHistory(targetDir);
-      await runGit(['fetch', '--', remoteUrl, branch], targetDir);
+      await ensureFullHistory(targetDir, auth);
+      await runGit(['fetch', '--', remoteUrl, branch], targetDir, env);
 
       try {
         await runGit(['rebase', 'FETCH_HEAD'], targetDir);
@@ -194,12 +256,12 @@ export class GitService implements IGitService {
         throw new GitError(`Push rejected and rebase onto latest ${branch} failed, likely a real conflict: ${msg}`);
       }
 
-      await this.attemptPush(targetDir, remoteUrl, branch);
+      await this.attemptPush(targetDir, remoteUrl, branch, env);
     }
   }
 
-  private async attemptPush(targetDir: string, remoteUrl: string, branch: string): Promise<void> {
+  private async attemptPush(targetDir: string, remoteUrl: string, branch: string, env: NodeJS.ProcessEnv): Promise<void> {
     logger.info('Pushing fix commit', undefined, { branch });
-    await runGit(['push', '--', remoteUrl, `HEAD:refs/heads/${branch}`], targetDir);
+    await runGit(['push', '--', remoteUrl, `HEAD:refs/heads/${branch}`], targetDir, env);
   }
 }

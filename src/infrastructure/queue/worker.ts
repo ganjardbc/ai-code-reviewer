@@ -1,10 +1,12 @@
-import { Worker, type Job } from 'bullmq';
+import { UnrecoverableError, Worker, type Job } from 'bullmq';
 import type { JobRunner, JobPayload } from '../../domain/interfaces/queue.interface.js';
 import { getRedisConnectionOptions } from './connection.js';
 import { QUEUE_NAME } from './client.js';
 import { logger } from '../logging/logger.js';
+import { config } from '../../config/index.js';
+import { isPermanentError } from '../../domain/errors/app-errors.js';
 
-const CONCURRENCY = Number(process.env['WORKER_CONCURRENCY'] ?? 3);
+const CONCURRENCY = config.WORKER_CONCURRENCY;
 
 export class QueueWorker {
   private readonly worker: Worker;
@@ -24,11 +26,23 @@ export class QueueWorker {
           queueWaitMs: Date.now() - job.timestamp,
         });
 
-        await runner({
-          name: job.name,
-          data: job.data as JobPayload,
-          id,
-        });
+        // attemptsMade counts finished attempts, so this one is attemptsMade + 1.
+        const isFinalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
+
+        try {
+          await runner({
+            name: job.name,
+            data: job.data as JobPayload,
+            id,
+            isFinalAttempt,
+          });
+        } catch (err) {
+          // Retrying bad input or rejected credentials can't succeed; fail now.
+          if (isPermanentError(err)) {
+            throw new UnrecoverableError((err as Error).message);
+          }
+          throw err;
+        }
       },
       { connection: getRedisConnectionOptions(), concurrency: CONCURRENCY },
     );

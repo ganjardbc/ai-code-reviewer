@@ -1,21 +1,30 @@
-import IORedis from 'ioredis';
+import { Redis as IORedis } from 'ioredis';
 import { config } from '../../config/index.js';
 import { logger } from '../logging/logger.js';
 
 export interface RedisConnectionOptions {
   host: string;
   port: number;
+  username?: string;
   password?: string;
+  db?: number;
+  tls?: Record<string, never>;
   maxRetriesPerRequest: null;
   enableReadyCheck: boolean;
 }
 
-export function getRedisConnectionOptions(): RedisConnectionOptions {
-  const url = new URL(config.REDIS_URL);
+export function getRedisConnectionOptions(redisUrl: string = config.REDIS_URL): RedisConnectionOptions {
+  const url = new URL(redisUrl);
+  const db = parseInt(url.pathname.slice(1), 10);
   return {
     host: url.hostname,
     port: parseInt(url.port, 10) || 6379,
-    password: url.password || undefined,
+    // ACL users (Redis 6+) and managed Redis need the username; percent-
+    // decoding matters for passwords containing reserved URL characters.
+    username: url.username ? decodeURIComponent(url.username) : undefined,
+    password: url.password ? decodeURIComponent(url.password) : undefined,
+    db: Number.isNaN(db) ? undefined : db,
+    tls: url.protocol === 'rediss:' ? {} : undefined,
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   };

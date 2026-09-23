@@ -8,7 +8,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="${PROJECT_NAME:-ai-code-review}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
+# Respect a caller-provided COMPOSE_FILE; otherwise the devbox overlay is
+# added below only when its external network exists.
+COMPOSE_FILE_FROM_ENV="${COMPOSE_FILE:-}"
 ENV_FILE="${ENV_FILE:-.env}"
 NETWORK_NAME="${NETWORK_NAME:-devbox_devnet}"
 
@@ -128,12 +130,18 @@ set -a
 source "$ENV_PATH"
 set +a
 
-# Ensure external network exists
-if docker network inspect "$NETWORK_NAME" &>/dev/null 2>&1; then
-  ok "External network '$NETWORK_NAME' exists"
+# Attach the devbox overlay only when its external network exists — compose
+# refuses to start if a declared external network is missing.
+if [ -n "$COMPOSE_FILE_FROM_ENV" ]; then
+  export COMPOSE_FILE="$COMPOSE_FILE_FROM_ENV"
+  ok "Using COMPOSE_FILE=$COMPOSE_FILE"
+elif docker network inspect "$NETWORK_NAME" &>/dev/null; then
+  export COMPOSE_FILE="docker-compose.yml:docker-compose.devbox.yml"
+  ok "External network '$NETWORK_NAME' exists — attaching api/worker to it"
 else
-  warn "External network '$NETWORK_NAME' not found — docker compose will create its own default network."
-  warn "If you need Nginx Proxy Manager integration, create it: docker network create $NETWORK_NAME"
+  export COMPOSE_FILE="docker-compose.yml"
+  warn "External network '$NETWORK_NAME' not found — deploying on the default compose network only."
+  warn "For Nginx Proxy Manager integration: docker network create $NETWORK_NAME, then redeploy."
 fi
 
 # ── Check-only mode ──────────────────────────────────────────────────────────

@@ -17,11 +17,13 @@ function ndjsonEvent(text: string): string {
 
 function makeMockChild(opts?: { exitCode?: number | null; stdout?: string; stderr?: string; spawnError?: Error }) {
   const child = new EventEmitter() as EventEmitter & {
+    stdin: EventEmitter & { end: (data?: string) => void };
     stdout: EventEmitter;
     stderr: EventEmitter;
     kill: (signal?: string) => boolean;
   };
 
+  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() });
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   child.kill = vi.fn().mockReturnValue(true);
@@ -114,10 +116,12 @@ describe('OpenCodeRunner', () => {
     vi.useFakeTimers();
 
     const child = new EventEmitter() as EventEmitter & {
+      stdin: EventEmitter & { end: (data?: string) => void };
       stdout: EventEmitter;
       stderr: EventEmitter;
       kill: (signal?: string) => boolean;
     };
+    child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() });
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     child.kill = vi.fn().mockReturnValue(true);
@@ -151,8 +155,31 @@ describe('OpenCodeRunner', () => {
 
     expect(mockedSpawn).toHaveBeenCalledWith(
       'my-opencode',
-      ['run', '--format', 'json', 'my prompt'],
+      ['run', '--format', 'json'],
       expect.any(Object),
     );
+  });
+
+  it('sends the prompt over stdin instead of argv', async () => {
+    const child = makeMockChild({ stdout: ndjsonEvent(VALID_JSON) });
+    mockedSpawn.mockReturnValue(child as ReturnType<typeof spawn>);
+
+    const runner = new OpenCodeRunner(parser);
+    await runner.review('my prompt');
+
+    expect(child.stdin.end).toHaveBeenCalledWith('my prompt');
+  });
+
+  it('denies all opencode tools and strips service secrets from the child env', async () => {
+    mockedSpawn.mockReturnValue(makeMockChild({ stdout: ndjsonEvent(VALID_JSON) }) as ReturnType<typeof spawn>);
+
+    const runner = new OpenCodeRunner(parser);
+    await runner.review('prompt');
+
+    const options = mockedSpawn.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv; cwd: string };
+    expect(JSON.parse(options.env['OPENCODE_PERMISSION']!)).toEqual({ '*': 'deny' });
+    expect(options.env['GITHUB_ACCESS_TOKEN']).toBeUndefined();
+    expect(options.env['GITLAB_ACCESS_TOKEN']).toBeUndefined();
+    expect(options.cwd).toContain('opencode-sandbox-');
   });
 });

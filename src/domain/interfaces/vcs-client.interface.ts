@@ -22,6 +22,9 @@ export interface PullRequestInfo {
   baseRef: string;
   headSha: string;
   cloneUrl: string;
+  /** Fork clone URL; undefined for same-repo PRs or when the fork was deleted. */
+  headCloneUrl?: string;
+  state: 'open' | 'closed';
 }
 
 export interface OutstandingComment {
@@ -42,6 +45,7 @@ export interface IGithubClient {
   getPullRequest(owner: string, repo: string, pullNumber: number): Promise<PullRequestInfo>;
   listOutstandingBotComments(owner: string, repo: string, pullNumber: number): Promise<OutstandingComment[]>;
   postIssueComment(options: PostFixReplyOptions): Promise<void>;
+  hasWriteAccess(owner: string, repo: string, username: string): Promise<boolean>;
 }
 
 export interface MergeRequestInfo {
@@ -61,4 +65,5 @@ export interface IGitlabClient {
   getMergeRequest(projectId: number, mrIid: number): Promise<MergeRequestInfo>;
   listOutstandingBotComments(projectId: number, mrIid: number): Promise<OutstandingComment[]>;
   postMrNote(options: PostMrFixReplyOptions): Promise<void>;
+  hasDeveloperAccess(projectId: number, userId: number): Promise<boolean>;
 }

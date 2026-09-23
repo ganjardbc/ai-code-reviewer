@@ -90,10 +90,16 @@ export class NineRouterService implements IAiProvider {
 
       if (choice?.finish_reason === 'length') {
         logger.warn('AI response truncated by max_tokens before completion', undefined, { length: raw.length });
+        // A truncated fix carries a partial file body; writing it would
+        // silently delete the rest of the file on the PR branch.
+        if (label === 'fix') {
+          throw new AiProviderError('AI fix response truncated by max_tokens; refusing to apply partial file content');
+        }
       }
 
       return raw;
     } catch (err) {
+      if (err instanceof AiProviderError) throw err;
       if (isAxiosError(err)) {
         const status = err.response?.status ?? 0;
         const body = JSON.stringify(err.response?.data ?? {});
@@ -102,7 +108,7 @@ export class NineRouterService implements IAiProvider {
           throw new AiProviderError(`9Router rate limit exceeded: ${body}`);
         }
         if (status === 401 || status === 403) {
-          throw new AiProviderError(`9Router authentication failed: ${body}`);
+          throw new AiProviderError(`9Router authentication failed: ${body}`, { permanent: true });
         }
         if (status >= 500 || status === 0) {
           throw new AiProviderError(`9Router gateway error (${status}): ${body}`);

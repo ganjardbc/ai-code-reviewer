@@ -150,6 +150,16 @@ describe('ParserService.parse', () => {
 });
 
 describe('ParserService.parseFix', () => {
+  it('rejects a truncated fix instead of repairing it into a partial file', () => {
+    const raw = '{"fixes":[{"filePath":"src/a.ts","content":"line1\\nfunction foo() {\\n  retu';
+    expect(parser.parseFix(raw).fixes).toHaveLength(0);
+  });
+
+  it('still accepts a complete fix wrapped in leading prose', () => {
+    const raw = 'Here you go: {"fixes":[{"filePath":"src/a.ts","content":"ok\\n"}]}';
+    expect(parser.parseFix(raw).fixes).toEqual([{ filePath: 'src/a.ts', content: 'ok\n' }]);
+  });
+
   it('parses valid fix JSON response', () => {
     const raw = JSON.stringify({ fixes: [{ filePath: 'src/auth.ts', content: 'export const x = 1;' }] });
     const result = parser.parseFix(raw);

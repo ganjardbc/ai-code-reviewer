@@ -88,3 +88,26 @@ describe('GitlabService.listOutstandingBotComments', () => {
     expect(result).toHaveLength(0);
   });
 });
+
+describe('GitlabService.postReview', () => {
+  const service = new GitlabService();
+  const comment = { filePath: 'src/a.ts', lineNumber: 1, message: 'Bug', severity: 'WARNING' as const };
+
+  it('throws when no comment could be posted, so the job is not reported as a success', async () => {
+    notesCreateMock.mockRejectedValue(new Error('403 Forbidden'));
+
+    await expect(
+      service.postReview({ projectId: 123, mrIid: 5, baseSha: 'h', startSha: 'h', headSha: 'h', comments: [comment, comment] }),
+    ).rejects.toThrow(/Failed to post any GitLab review comments/);
+
+    notesCreateMock.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('succeeds when at least one comment was posted', async () => {
+    notesCreateMock.mockRejectedValueOnce(new Error('bad line')).mockResolvedValueOnce(undefined);
+
+    await expect(
+      service.postReview({ projectId: 123, mrIid: 5, baseSha: 'h', startSha: 'h', headSha: 'h', comments: [comment, comment] }),
+    ).resolves.toBeUndefined();
+  });
+});

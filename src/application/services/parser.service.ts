@@ -1,4 +1,4 @@
-import Ajv from 'ajv';
+import { Ajv } from 'ajv';
 import type { AiReviewComment, ReviewResult, FileFix, FixResult } from '../../domain/interfaces/ai-provider.interface.js';
 import { logger } from '../../infrastructure/logging/logger.js';
 
@@ -63,11 +63,11 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-function extractJson(text: string): string {
-  // Anchor on the "comments" key so stray braces in leaked reasoning/code
+function extractJson(text: string, anchorKey = 'comments'): string {
+  // Anchor on the top-level key so stray braces in leaked reasoning/code
   // (e.g. "initialValues: {") before the real JSON don't get picked as the start.
-  const commentsIdx = text.indexOf('"comments"');
-  const searchFrom = commentsIdx !== -1 ? commentsIdx : text.length;
+  const anchorIdx = text.indexOf(`"${anchorKey}"`);
+  const searchFrom = anchorIdx !== -1 ? anchorIdx : text.length;
   const start = text.lastIndexOf('{', searchFrom);
   const end = text.lastIndexOf('}');
   if (start !== -1 && end !== -1 && end > start) {
@@ -182,6 +182,23 @@ function repairJson(str: string): string {
   return result;
 }
 
+// Fix responses are never repaired: repairJson closes unterminated strings,
+// which turns a max_tokens-truncated file body into a "valid" fix that would
+// be written, committed and pushed with the rest of the file missing.
+function parseStrict(raw: string): unknown {
+  const cleaned = stripMarkdown(raw);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    try {
+      return JSON.parse(extractJson(cleaned, 'fixes'));
+    } catch {
+      throw new Error(`Unable to parse AI response as JSON: ${cleaned.slice(0, 200)}`);
+    }
+  }
+}
+
 function parseRaw(raw: string): unknown {
   const cleaned = stripMarkdown(raw);
 
@@ -227,7 +244,7 @@ export class ParserService implements IOutputParser, IFixOutputParser {
 
     let parsed: unknown;
     try {
-      parsed = parseRaw(rawText);
+      parsed = parseStrict(rawText);
     } catch (err) {
       logger.error('Failed to parse AI fix response', err instanceof Error ? err : new Error(String(err)));
       return { fixes: [] };

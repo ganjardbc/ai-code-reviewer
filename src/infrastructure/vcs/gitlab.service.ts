@@ -10,6 +10,9 @@ import { config } from '../../config/index.js';
 import { logger } from '../logging/logger.js';
 import { withBotMarker, hasBotMarker } from './bot-marker.js';
 
+// Developer is the lowest GitLab role allowed to push to non-protected branches.
+const DEVELOPER_ACCESS_LEVEL = 30;
+
 const BODY_POSITION_PATTERN = /`([^`\s:]+):(\d+)`/;
 
 function extractPositionFromBody(body: string): { filePath: string; lineNumber: number } | undefined {
@@ -93,6 +96,10 @@ export class GitlabService implements IGitlabClient {
       posted,
       failed: failures.length,
     });
+
+    if (posted === 0) {
+      throw new Error(`Failed to post any GitLab review comments: ${failures.join('; ')}`);
+    }
   }
 
   async listOutstandingBotComments(projectId: number, mrIid: number): Promise<OutstandingComment[]> {
@@ -126,6 +133,18 @@ export class GitlabService implements IGitlabClient {
   async postMrNote(options: PostMrFixReplyOptions): Promise<void> {
     const { projectId, mrIid, body } = options;
     await this.api.MergeRequestNotes.create(projectId, mrIid, body);
+  }
+
+  async hasDeveloperAccess(projectId: number, userId: number): Promise<boolean> {
+    try {
+      const member = await this.api.ProjectMembers.show(projectId, userId, { includeInherited: true });
+      return (member as unknown as { access_level: number }).access_level >= DEVELOPER_ACCESS_LEVEL;
+    } catch (err) {
+      // 404 = not a project member (directly or via group); anything else is a real failure.
+      const status = (err as { cause?: { response?: { status?: number } } }).cause?.response?.status;
+      if (status === 404) return false;
+      throw err;
+    }
   }
 
   async getMergeRequest(projectId: number, mrIid: number): Promise<MergeRequestInfo> {

@@ -1,0 +1,18 @@
+# Optional overlay: attaches api and worker to the external `devbox_devnet`
+# network (e.g. for Nginx Proxy Manager). deploy.sh adds it automatically
+# when that network exists; manually:
+#   docker compose -f docker-compose.yml -f docker-compose.devbox.yml up -d
+services:
+  api:
+    networks:
+      - default
+      - devbox_devnet
+
+  worker:
+    networks:
+      - default
+      - devbox_devnet
+
+networks:
+  devbox_devnet:
+    external: true
