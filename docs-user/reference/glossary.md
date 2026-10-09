@@ -6,7 +6,7 @@ Alphabetical definitions of terms used throughout the AI Code Reviewer documenta
 
 ## 9Router
 
-The AI gateway service used by this application. 9Router acts as a proxy and router between the application and underlying large language models (LLMs). The application sends code review prompts to 9Router via its API, and 9Router routes the request to the configured model (e.g., GPT-4o). Configured via `NINE_ROUTER_API_KEY` and `NINE_ROUTER_BASE_URL`.
+The AI gateway service used by this application. 9Router acts as a proxy and router between the application and underlying large language models (LLMs). The application sends code review prompts to 9Router via its API, and 9Router routes the request to the configured model (e.g., GPT-4o). Configured via `OPENAI_API_KEY` and `OPENAI_BASE_URL`.
 
 ---
 
@@ -54,7 +54,7 @@ The domain interface (`src/domain/interfaces/IVcsClient.ts`) that all version co
 
 ## IAiProvider
 
-The domain interface (`src/domain/interfaces/IAiProvider.ts`) that all AI provider integrations must implement. Defines a single `review(prompt: string, diff: string): Promise<ReviewResult>` method. Current implementation: `NineRouterService`. New AI providers (OpenAI direct, Anthropic, etc.) implement this interface.
+The domain interface (`src/domain/interfaces/IAiProvider.ts`) that all AI provider integrations must implement. Defines a single `review(prompt: string, diff: string): Promise<ReviewResult>` method. Current implementation: `OpenAiCompatibleService`. New AI providers (OpenAI direct, Anthropic, etc.) implement this interface.
 
 ---
 

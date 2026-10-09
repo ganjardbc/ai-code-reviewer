@@ -157,7 +157,7 @@ Look for errors in the first 30 seconds after startup. Common restore issues:
 
 - `ECONNREFUSED` for Redis → Redis not started, or wrong `REDIS_URL`
 - `invalid token` → GitHub/GitLab access token in `.env` may be stale; rotate it
-- `NINE_ROUTER_API_KEY` error → Verify API key is correct
+- `OPENAI_API_KEY` error → Verify API key is correct
 
 ---
 

@@ -56,8 +56,8 @@ docker run -d \
   -e NODE_ENV=production \
   -e LOG_LEVEL=info \
   -e REDIS_URL=redis://redis:6379 \
-  -e NINE_ROUTER_API_KEY=your_key_here \
-  -e NINE_ROUTER_BASE_URL=https://api.9router.io \
+  -e OPENAI_API_KEY=your_key_here \
+  -e OPENAI_BASE_URL=https://api.9router.io \
   -e GITHUB_WEBHOOK_SECRET=your_secret \
   -e GITHUB_ACCESS_TOKEN=ghp_xxxxxxxx \
   -e GITLAB_WEBHOOK_SECRET=your_secret \
@@ -76,8 +76,8 @@ docker run -d \
   -e NODE_ENV=production \
   -e LOG_LEVEL=info \
   -e REDIS_URL=redis://redis:6379 \
-  -e NINE_ROUTER_API_KEY=your_key_here \
-  -e NINE_ROUTER_BASE_URL=https://api.9router.io \
+  -e OPENAI_API_KEY=your_key_here \
+  -e OPENAI_BASE_URL=https://api.9router.io \
   -e GITHUB_ACCESS_TOKEN=ghp_xxxxxxxx \
   -e GITLAB_ACCESS_TOKEN=glpat-xxxxxxxx \
   -e WORKSPACE_DIR=/workspace \

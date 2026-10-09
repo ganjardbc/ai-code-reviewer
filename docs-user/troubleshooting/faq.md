@@ -25,7 +25,7 @@ You still need Redis running. Start it with Docker (`docker run -d -p 6379:6379 
 
 ### Can I use a different AI model?
 
-Yes. The AI model is configured in `src/infrastructure/ai/nine-router.service.ts`. Change the `model` field in the API call to any model supported by your 9Router account.
+Yes. The AI model is configured in `src/infrastructure/ai/openai-compatible.service.ts`. Change the `model` field in the API call to any model supported by your 9Router account.
 
 The system prompt is designed for instruction-following models. Models tested:
 - GPT-4o (recommended)

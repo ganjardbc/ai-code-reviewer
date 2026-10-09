@@ -85,20 +85,20 @@ WORKER_CONCURRENCY=10  # High throughput, I/O-bound workloads
 
 | Variable | Type | Default | Required | Description |
 |----------|------|---------|----------|-------------|
-| `NINE_ROUTER_API_KEY` | string | — | **Yes** | API key for authenticating with the 9Router AI gateway |
-| `NINE_ROUTER_BASE_URL` | string (URL) | — | **Yes** | Base URL for the 9Router API (no trailing slash) |
+| `OPENAI_API_KEY` | string | — | **Yes** | API key for authenticating with the 9Router AI gateway |
+| `OPENAI_BASE_URL` | string (URL) | — | **Yes** | Base URL for the 9Router API (no trailing slash) |
 
 ### Examples
 
 ```dotenv
-NINE_ROUTER_API_KEY=nr-sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-NINE_ROUTER_BASE_URL=https://api.9router.io
+OPENAI_API_KEY=nr-sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_BASE_URL=https://api.9router.io
 ```
 
 ### Validation Rules
 
-- `NINE_ROUTER_API_KEY`: Non-empty string
-- `NINE_ROUTER_BASE_URL`: Must be a valid HTTPS URL with no trailing slash
+- `OPENAI_API_KEY`: Non-empty string
+- `OPENAI_BASE_URL`: Must be a valid HTTPS URL with no trailing slash
 
 ---
 
@@ -190,8 +190,8 @@ WORKSPACE_DIR=/data/ai-reviewer/workspace
 | `QUEUE_JOB_TTL_SECONDS` | No | Yes (`86400`) |
 | `QUEUE_MAX_JOBS_RETAINED` | No | Yes (`100`) |
 | `WORKER_CONCURRENCY` | No | Yes (`3`) |
-| `NINE_ROUTER_API_KEY` | **Yes** | No |
-| `NINE_ROUTER_BASE_URL` | **Yes** | No |
+| `OPENAI_API_KEY` | **Yes** | No |
+| `OPENAI_BASE_URL` | **Yes** | No |
 | `GITHUB_WEBHOOK_SECRET` | **Yes** | No |
 | `GITHUB_ACCESS_TOKEN` | **Yes** | No |
 | `GITLAB_WEBHOOK_SECRET` | **Yes** | No |
@@ -206,8 +206,8 @@ WORKSPACE_DIR=/data/ai-reviewer/workspace
 NODE_ENV=production
 LOG_LEVEL=info
 REDIS_URL=redis://redis:6379
-NINE_ROUTER_API_KEY=your_api_key_here
-NINE_ROUTER_BASE_URL=https://api.9router.io
+OPENAI_API_KEY=your_api_key_here
+OPENAI_BASE_URL=https://api.9router.io
 GITHUB_WEBHOOK_SECRET=your_github_webhook_secret
 GITHUB_ACCESS_TOKEN=ghp_your_token
 GITLAB_WEBHOOK_SECRET=your_gitlab_webhook_secret

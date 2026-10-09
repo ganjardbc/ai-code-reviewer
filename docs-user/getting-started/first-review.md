@@ -167,7 +167,7 @@ Look for `"msg":"Diff generated"` in the worker log. If you see an error instead
 
 Look for `"msg":"AI response received"` in the worker log. If you see an error:
 
-- Check `NINE_ROUTER_API_KEY` and `NINE_ROUTER_BASE_URL` in `.env`.
+- Check `OPENAI_API_KEY` and `OPENAI_BASE_URL` in `.env`.
 - Verify network access from the worker host to the 9Router API.
 
 **7. Were comments posted?**
@@ -188,7 +188,7 @@ Look for `"msg":"Comments posted"` in the worker log. If the AI responded but no
 | `Redis connection failed` | Redis not running or wrong URL | Start Redis; check `REDIS_URL` |
 | `Clone failed: authentication required` | Token lacks `repo` scope or is expired | Re-generate `GITHUB_ACCESS_TOKEN` with `repo` scope |
 | `Diff exceeds size limit` | PR changes too large (>40 KB filtered) | Split the PR into smaller pieces |
-| `AI response parse error` | Unexpected response from 9Router | Check `NINE_ROUTER_BASE_URL`; verify the model supports structured output |
+| `AI response parse error` | Unexpected response from 9Router | Check `OPENAI_BASE_URL`; verify the model supports structured output |
 | `Failed to post review comment` | Token lacks write access | Confirm the token owner has write access to the repository |
 
 ---

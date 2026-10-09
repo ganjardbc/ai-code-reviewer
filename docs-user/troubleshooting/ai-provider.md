@@ -6,10 +6,10 @@ The AI Code Reviewer sends code diffs to 9Router, which routes the request to an
 
 ## Overview
 
-9Router acts as an AI gateway. The application calls it via `src/infrastructure/ai/nine-router.service.ts` using:
+9Router acts as an AI gateway. The application calls it via `src/infrastructure/ai/openai-compatible.service.ts` using:
 
-- `NINE_ROUTER_BASE_URL` — Base URL of the 9Router API
-- `NINE_ROUTER_API_KEY` — Authentication key
+- `OPENAI_BASE_URL` — Base URL of the 9Router API
+- `OPENAI_API_KEY` — Authentication key
 
 All AI provider errors result in the review job failing. BullMQ will retry the job according to the retry configuration.
 
@@ -30,7 +30,7 @@ Error: Request failed with status code 0 (Network Error)
 ```bash
 # Test from the worker container
 docker compose exec worker curl -s -o /dev/null -w "%{http_code}" \
-  "$NINE_ROUTER_BASE_URL/health"
+  "$OPENAI_BASE_URL/health"
 
 # Test basic DNS resolution
 docker compose exec worker nslookup api.9router.io
@@ -43,7 +43,7 @@ docker compose exec worker curl -s https://api.9router.io
 
 | Cause | Fix |
 |-------|-----|
-| `NINE_ROUTER_BASE_URL` is wrong | Verify the URL in `.env` (no trailing slash) |
+| `OPENAI_BASE_URL` is wrong | Verify the URL in `.env` (no trailing slash) |
 | No outbound internet access from container | Check Docker network and firewall rules |
 | DNS resolution failing | Use a reliable DNS server (8.8.8.8) in Docker daemon config |
 | 9Router service is down | Check 9Router's status page or contact support |
@@ -63,13 +63,13 @@ Error: Request failed with status code 401
 
 1. Verify the key in `.env`:
    ```bash
-   grep NINE_ROUTER_API_KEY .env
+   grep OPENAI_API_KEY .env
    ```
 2. Confirm the key is active in the 9Router dashboard
 3. Regenerate the key if needed and update `.env`:
    ```bash
    # Update .env
-   NINE_ROUTER_API_KEY=new_key_here
+   OPENAI_API_KEY=new_key_here
 
    # Restart worker to pick up the new key
    docker compose restart worker
@@ -124,15 +124,15 @@ Error: Request timeout
 Check if 9Router is responding slowly:
 
 ```bash
-time curl -s -X POST "$NINE_ROUTER_BASE_URL/v1/chat/completions" \
-  -H "Authorization: Bearer $NINE_ROUTER_API_KEY" \
+time curl -s -X POST "$OPENAI_BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "ping"}]}'
 ```
 
 ### Fixes
 
-1. **Increase timeout** — Modify `src/infrastructure/ai/nine-router.service.ts` to increase the axios timeout
+1. **Increase timeout** — Modify `src/infrastructure/ai/openai-compatible.service.ts` to increase the axios timeout
 2. **Check 9Router status** — If the service is degraded, wait for recovery
 3. **Switch to a faster model** — Smaller models (e.g., GPT-3.5-turbo) respond faster than GPT-4
 
@@ -157,7 +157,7 @@ Error: Request failed with status code 400
 ### Fix
 
 1. Check which models are available via your 9Router account
-2. Update the model identifier in `src/infrastructure/ai/nine-router.service.ts`
+2. Update the model identifier in `src/infrastructure/ai/openai-compatible.service.ts`
 3. Verify the model name matches 9Router's documented API schema
 
 ---
@@ -190,7 +190,7 @@ The model is not following the JSON output instruction in the system prompt.
    ```typescript
    response_format: { type: "json_object" }
    ```
-   Add this to the API call in `nine-router.service.ts`.
+   Add this to the API call in `openai-compatible.service.ts`.
 
 2. **Strengthen the prompt** — Update `src/application/services/prompt.service.ts` to more forcefully require JSON:
    ```
@@ -214,8 +214,8 @@ LOG_LEVEL=debug docker compose up worker 2>&1 | grep -A 50 "nine-router request"
 To test the 9Router API directly:
 
 ```bash
-curl -s -X POST "$NINE_ROUTER_BASE_URL/v1/chat/completions" \
-  -H "Authorization: Bearer $NINE_ROUTER_API_KEY" \
+curl -s -X POST "$OPENAI_BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4o",

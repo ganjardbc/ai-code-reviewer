@@ -1,8 +1,8 @@
 // Set required env vars before any module that reads config is imported
 process.env['NODE_ENV'] = 'test';
 process.env['REDIS_URL'] = 'redis://localhost:6379';
-process.env['NINE_ROUTER_API_KEY'] = 'test-api-key';
-process.env['NINE_ROUTER_BASE_URL'] = 'https://api.9router.com/v1';
+process.env['OPENAI_API_KEY'] = 'test-api-key';
+process.env['OPENAI_BASE_URL'] = 'https://api.openai.com/v1';
 process.env['GITHUB_WEBHOOK_SECRET'] = 'github-test-secret';
 process.env['GITHUB_ACCESS_TOKEN'] = 'test-gh-token';
 process.env['GITLAB_WEBHOOK_SECRET'] = 'gitlab-test-secret';

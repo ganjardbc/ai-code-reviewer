@@ -16,8 +16,8 @@ defaults.
 | `NODE_ENV` | enum | `development` | No | `development` / `production` / `test` |
 | `LOG_LEVEL` | enum | `info` | No | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |
 | `REDIS_URL` | URL string | — | **Yes** | Full BullMQ / ioredis connection URI |
-| `NINE_ROUTER_API_KEY` | string | — | **Yes** | Bearer token for the 9Router AI gateway |
-| `NINE_ROUTER_BASE_URL` | URL string | `https://api.9router.com/v1` | No | Override 9Router endpoint (staging / self-hosted) |
+| `OPENAI_API_KEY` | string | — | **Yes** | Bearer token for the 9Router AI gateway |
+| `OPENAI_BASE_URL` | URL string | — | When `AI_RUNNER=direct` | Base URL of the OpenAI-compatible endpoint, e.g. `https://api.9router.com/v1` |
 | `GITHUB_WEBHOOK_SECRET` | string | — | Yes\* | HMAC-SHA256 secret configured in the GitHub webhook |
 | `GITHUB_ACCESS_TOKEN` | string | — | Yes\* | GitHub PAT used to post PR review comments |
 | `GITLAB_WEBHOOK_SECRET` | string | — | Yes\* | Token GitLab sends in `X-Gitlab-Token` header |
@@ -52,8 +52,8 @@ LOG_LEVEL=info
 REDIS_URL=redis://localhost:6379
 
 # ── 9Router AI Gateway (required) ─────────────────────────────────────────────
-NINE_ROUTER_API_KEY=your-9router-api-key-here
-NINE_ROUTER_BASE_URL=https://api.9router.com/v1
+OPENAI_API_KEY=your-9router-api-key-here
+OPENAI_BASE_URL=https://api.9router.com/v1
 
 # ── GitHub Integration ────────────────────────────────────────────────────────
 # Required if you receive GitHub webhooks.
@@ -82,7 +82,7 @@ QUEUE_MAX_JOBS_RETAINED=100
 ### Always required
 
 - `REDIS_URL` — BullMQ cannot connect without it.
-- `NINE_ROUTER_API_KEY` — every review job calls the AI gateway; requests will fail with a 401 if
+- `OPENAI_API_KEY` — every review job calls the AI gateway; requests will fail with a 401 if
   this is missing.
 
 ### Provider-conditional
@@ -126,7 +126,7 @@ on disk:
 ```yaml
 # Kubernetes Secret → env var
 env:
-  - name: NINE_ROUTER_API_KEY
+  - name: OPENAI_API_KEY
     valueFrom:
       secretKeyRef:
         name: ai-reviewer-secrets
@@ -154,7 +154,7 @@ before the Node.js process starts.
 ### GitHub Actions / CI
 
 Store secrets under **Settings → Secrets and variables → Actions** and reference them as
-`${{ secrets.NINE_ROUTER_API_KEY }}`.
+`${{ secrets.OPENAI_API_KEY }}`.
 
 ---
 
@@ -166,7 +166,7 @@ and exits with code 1:
 ```
 Error: Configuration validation failed:
   - REDIS_URL: REDIS_URL must be a valid URL
-  - NINE_ROUTER_API_KEY: NINE_ROUTER_API_KEY cannot be empty
+  - OPENAI_API_KEY: OPENAI_API_KEY cannot be empty
 ```
 
 Fix each listed field in `.env` (or the injected environment) and restart.

@@ -28,17 +28,17 @@ interface ChatResponse {
   choices: ChatChoice[];
 }
 
-export class NineRouterService implements IAiProvider {
+export class OpenAiCompatibleService implements IAiProvider {
   private readonly client: AxiosInstance;
   private readonly parser: IOutputParser & IFixOutputParser;
 
   constructor(parser: IOutputParser & IFixOutputParser) {
     this.parser = parser;
     this.client = axios.create({
-      baseURL: config.NINE_ROUTER_BASE_URL,
+      baseURL: config.OPENAI_BASE_URL,
       timeout: 120_000,
       headers: {
-        'Authorization': `Bearer ${config.NINE_ROUTER_API_KEY ?? ''}`,
+        'Authorization': `Bearer ${config.OPENAI_API_KEY ?? ''}`,
         'Content-Type': 'application/json',
       },
     });
@@ -72,14 +72,14 @@ export class NineRouterService implements IAiProvider {
 
   private async sendChat(messages: ChatMessage[], maxTokens: number, label: string): Promise<string> {
     const payload: ChatRequest = {
-      model: config.NINE_ROUTER_MODEL,
+      model: config.OPENAI_MODEL,
       messages,
       temperature: 0.1,
       response_format: { type: 'json_object' },
       max_tokens: maxTokens,
     };
 
-    logger.info(`Sending ${label} request to 9Router`);
+    logger.info(`Sending ${label} request to AI provider`);
 
     try {
       const response = await this.client.post<ChatResponse>('/chat/completions', payload);
@@ -105,16 +105,16 @@ export class NineRouterService implements IAiProvider {
         const body = JSON.stringify(err.response?.data ?? {});
 
         if (status === 429) {
-          throw new AiProviderError(`9Router rate limit exceeded: ${body}`);
+          throw new AiProviderError(`AI provider rate limit exceeded: ${body}`);
         }
         if (status === 401 || status === 403) {
-          throw new AiProviderError(`9Router authentication failed: ${body}`, { permanent: true });
+          throw new AiProviderError(`AI provider authentication failed: ${body}`, { permanent: true });
         }
         if (status >= 500 || status === 0) {
-          throw new AiProviderError(`9Router gateway error (${status}): ${body}`);
+          throw new AiProviderError(`AI provider gateway error (${status}): ${body}`);
         }
 
-        throw new AiProviderError(`9Router request failed (${status}): ${body}`);
+        throw new AiProviderError(`AI provider request failed (${status}): ${body}`);
       }
 
       throw new AiProviderError(`AI provider unexpected error: ${String(err)}`);

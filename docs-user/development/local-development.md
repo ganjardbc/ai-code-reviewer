@@ -36,8 +36,8 @@ Edit `.env` and fill in at minimum:
 NODE_ENV=development
 LOG_LEVEL=debug
 REDIS_URL=redis://localhost:6379
-NINE_ROUTER_API_KEY=your_key_here
-NINE_ROUTER_BASE_URL=https://api.9router.io
+OPENAI_API_KEY=your_key_here
+OPENAI_BASE_URL=https://api.9router.io
 GITHUB_WEBHOOK_SECRET=local-dev-secret
 GITHUB_ACCESS_TOKEN=ghp_your_token
 WORKSPACE_DIR=/tmp/ai-reviewer/workspace

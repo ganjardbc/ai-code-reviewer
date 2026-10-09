@@ -36,8 +36,8 @@ cp .env.example .env
 Open `.env` and set at minimum:
 
 ```dotenv
-NINE_ROUTER_API_KEY=<your-key>
-NINE_ROUTER_BASE_URL=https://api.9router.com/v1
+OPENAI_API_KEY=<your-key>
+OPENAI_BASE_URL=https://api.9router.com/v1
 GITHUB_WEBHOOK_SECRET=<choose-any-random-string>
 GITHUB_ACCESS_TOKEN=<your-github-pat>
 ```

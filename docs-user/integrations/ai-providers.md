@@ -29,9 +29,9 @@ The `review` method receives the fully assembled prompt string (system prompt + 
 
 ---
 
-## Current Implementation: NineRouterService
+## Current Implementation: OpenAiCompatibleService
 
-`src/infrastructure/ai/nine-router.service.ts` implements `IAiProvider` using the 9Router gateway.
+`src/infrastructure/ai/openai-compatible.service.ts` implements `IAiProvider` using the 9Router gateway.
 
 Responsibilities:
 
@@ -78,11 +78,11 @@ MY_PROVIDER_BASE_URL: z.url().optional(),
 
 ### 3. Register in the composition root
 
-In `src/worker.ts` (or wherever the dependency graph is assembled), replace the `NineRouterService` instantiation:
+In `src/worker.ts` (or wherever the dependency graph is assembled), replace the `OpenAiCompatibleService` instantiation:
 
 ```typescript
 // Before
-const aiProvider = new NineRouterService(parserService);
+const aiProvider = new OpenAiCompatibleService(parserService);
 
 // After
 const aiProvider = new MyProviderService(parserService);

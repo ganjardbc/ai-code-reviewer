@@ -10,13 +10,18 @@ import { logger } from '../logging/logger.js';
 // The prompt embeds untrusted PR content, and `opencode run` is an agent with
 // tools. Deny every tool so injected instructions can't run commands, read
 // files or fetch URLs, and strip this service's own secrets from its env.
+// OPENAI_* belong to the direct runner; left in the env they would also make
+// opencode pick up an OpenAI provider pointed at that key and endpoint.
 const OPENCODE_PERMISSION = JSON.stringify({ '*': 'deny' });
 const SECRET_ENV_KEYS = [
   'GITHUB_ACCESS_TOKEN',
   'GITHUB_WEBHOOK_SECRET',
   'GITLAB_ACCESS_TOKEN',
   'GITLAB_WEBHOOK_SECRET',
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
   'NINE_ROUTER_API_KEY',
+  'NINE_ROUTER_BASE_URL',
   'TELEGRAM_BOT_TOKEN',
   'REDIS_URL',
 ];

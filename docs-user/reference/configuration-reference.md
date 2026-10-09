@@ -124,7 +124,7 @@ const EXCLUDED_PATTERNS = [
 
 ## AI Request Parameters
 
-Configured in `src/infrastructure/ai/nine-router.service.ts`.
+Configured in `src/infrastructure/ai/openai-compatible.service.ts`.
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|

@@ -2,6 +2,7 @@ import pino from 'pino';
 import type { ILogger } from './logger.interface.js';
 
 const SENSITIVE_KEYS = [
+  'OPENAI_API_KEY',
   'NINE_ROUTER_API_KEY',
   'GITHUB_ACCESS_TOKEN',
   'GITHUB_WEBHOOK_SECRET',
