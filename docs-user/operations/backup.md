@@ -43,7 +43,7 @@ age -r "ssh-ed25519 AAAA..." .env > .env.age
 ### What the `.env` Contains
 
 ```
-NINE_ROUTER_API_KEY        → AI provider billing/access key
+OPENAI_API_KEY        → AI provider billing/access key
 GITHUB_WEBHOOK_SECRET      → HMAC signing secret for GitHub
 GITHUB_ACCESS_TOKEN        → GitHub PAT (access to private repos)
 GITLAB_WEBHOOK_SECRET      → HMAC signing secret for GitLab

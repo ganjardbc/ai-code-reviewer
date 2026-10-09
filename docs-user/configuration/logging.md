@@ -99,7 +99,7 @@ The following fields are automatically redacted with `[REDACTED]` before being w
 output stream:
 
 ```
-NINE_ROUTER_API_KEY  GITHUB_ACCESS_TOKEN  GITHUB_WEBHOOK_SECRET
+OPENAI_API_KEY  GITHUB_ACCESS_TOKEN  GITHUB_WEBHOOK_SECRET
 GITLAB_ACCESS_TOKEN  GITLAB_WEBHOOK_SECRET  authorization  password  token  secret
 ```
 

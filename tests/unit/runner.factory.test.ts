@@ -9,7 +9,7 @@ const mockParser: IOutputParser = { parse: vi.fn() };
 
 const baseConfig = {
   AI_RUNNER: 'direct' as const,
-  NINE_ROUTER_API_KEY: 'test-key',
+  OPENAI_API_KEY: 'test-key',
   OPENCODE_TIMEOUT_MS: 120_000,
   OPENCODE_COMMAND: 'opencode',
 };
@@ -25,15 +25,15 @@ describe('createRunner', () => {
     expect(runner).toBeInstanceOf(OpenCodeRunner);
   });
 
-  it('throws when AI_RUNNER=direct and NINE_ROUTER_API_KEY missing', () => {
+  it('throws when AI_RUNNER=direct and OPENAI_API_KEY missing', () => {
     expect(() =>
-      createRunner(mockParser, { ...baseConfig, AI_RUNNER: 'direct', NINE_ROUTER_API_KEY: undefined }),
-    ).toThrow('NINE_ROUTER_API_KEY is required when AI_RUNNER=direct');
+      createRunner(mockParser, { ...baseConfig, AI_RUNNER: 'direct', OPENAI_API_KEY: undefined }),
+    ).toThrow('OPENAI_API_KEY is required when AI_RUNNER=direct');
   });
 
-  it('does not throw when AI_RUNNER=opencode and NINE_ROUTER_API_KEY missing', () => {
+  it('does not throw when AI_RUNNER=opencode and OPENAI_API_KEY missing', () => {
     expect(() =>
-      createRunner(mockParser, { ...baseConfig, AI_RUNNER: 'opencode', NINE_ROUTER_API_KEY: undefined }),
+      createRunner(mockParser, { ...baseConfig, AI_RUNNER: 'opencode', OPENAI_API_KEY: undefined }),
     ).not.toThrow();
   });
 

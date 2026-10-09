@@ -28,7 +28,7 @@ src/
 │
 ├── infrastructure/
 │   ├── ai/
-│   │   └── nine-router.service.ts  # IAiProvider impl — calls 9Router API
+│   │   └── openai-compatible.service.ts  # IAiProvider impl — calls 9Router API
 │   ├── vcs/
 │   │   ├── github.service.ts   # IVcsClient impl — GitHub API (@octokit/rest)
 │   │   ├── gitlab.service.ts   # IVcsClient impl — GitLab API (@gitbeaker/rest)

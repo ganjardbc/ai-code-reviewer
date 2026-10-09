@@ -136,7 +136,7 @@ Verify the repository URL in the webhook payload matches the actual repository.
 
 ```
 Error: Request timeout after 30000ms
-  at nine-router.service.ts
+  at openai-compatible.service.ts
 ```
 
 Jobs fail with timeout errors; review comments are not posted.

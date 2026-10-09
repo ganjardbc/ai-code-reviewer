@@ -43,7 +43,7 @@ If the response is HTML, the problem is at the provider level — see [AI Provid
 
 1. **Retry the job** — transient errors usually self-resolve on the next webhook event (re-open/re-push the PR/MR triggers a new job)
 2. **Check the prompt** — if the model consistently returns non-JSON, the system prompt may not be enforcing JSON output format clearly
-3. **Check `response_format`** — if the 9Router / model supports `response_format: {type: "json_object"}`, enable it in `src/infrastructure/ai/nine-router.service.ts`
+3. **Check `response_format`** — if the 9Router / model supports `response_format: {type: "json_object"}`, enable it in `src/infrastructure/ai/openai-compatible.service.ts`
 
 ---
 
@@ -164,7 +164,7 @@ The model's response consistency depends on the `temperature` parameter. Lower v
 | Code review (production) | 0.1–0.3 | High structure, consistent JSON output |
 | Code review (development) | 0.5 | More varied feedback |
 
-To adjust temperature, modify the AI provider service call in `src/infrastructure/ai/nine-router.service.ts`.
+To adjust temperature, modify the AI provider service call in `src/infrastructure/ai/openai-compatible.service.ts`.
 
 ---
 

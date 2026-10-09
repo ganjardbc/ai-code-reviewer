@@ -43,8 +43,8 @@ LOG_LEVEL=info
 REDIS_URL=redis://localhost:6379
 
 # 9Router AI Gateway (required)
-NINE_ROUTER_API_KEY=your-9router-api-key-here
-NINE_ROUTER_BASE_URL=https://api.9router.com/v1
+OPENAI_API_KEY=your-9router-api-key-here
+OPENAI_BASE_URL=https://api.9router.com/v1
 
 # GitHub Integration (required)
 GITHUB_WEBHOOK_SECRET=your-github-webhook-secret
@@ -199,8 +199,8 @@ The `Dockerfile` uses a three-stage build (builder → pruner → runner) with a
 | `NODE_ENV` | No | `development` | Set to `production` in deployed environments |
 | `LOG_LEVEL` | No | `info` | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `REDIS_URL` | Yes | — | Full Redis connection string, e.g., `redis://localhost:6379` |
-| `NINE_ROUTER_API_KEY` | Yes | — | API key for the 9Router AI gateway |
-| `NINE_ROUTER_BASE_URL` | Yes | — | Base URL for the 9Router API, e.g., `https://api.9router.com/v1` |
+| `OPENAI_API_KEY` | Yes | — | API key for the 9Router AI gateway |
+| `OPENAI_BASE_URL` | Yes | — | Base URL for the 9Router API, e.g., `https://api.9router.com/v1` |
 | `GITHUB_WEBHOOK_SECRET` | Yes* | — | Secret used to validate GitHub webhook HMAC signatures |
 | `GITHUB_ACCESS_TOKEN` | Yes* | — | GitHub personal access token (`repo` scope) |
 | `GITLAB_WEBHOOK_SECRET` | Yes* | — | Secret used to validate GitLab webhook tokens |

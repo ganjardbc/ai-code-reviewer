@@ -180,6 +180,8 @@ describe('OpenCodeRunner', () => {
     expect(JSON.parse(options.env['OPENCODE_PERMISSION']!)).toEqual({ '*': 'deny' });
     expect(options.env['GITHUB_ACCESS_TOKEN']).toBeUndefined();
     expect(options.env['GITLAB_ACCESS_TOKEN']).toBeUndefined();
+    expect(options.env['OPENAI_API_KEY']).toBeUndefined();
+    expect(options.env['OPENAI_BASE_URL']).toBeUndefined();
     expect(options.cwd).toContain('opencode-sandbox-');
   });
 });

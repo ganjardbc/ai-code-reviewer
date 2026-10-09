@@ -56,8 +56,8 @@ LOG_LEVEL=debug
 REDIS_URL=redis://localhost:6379
 
 # AI Provider (9Router)
-NINE_ROUTER_API_KEY=your_nine_router_api_key_here
-NINE_ROUTER_BASE_URL=https://api.9router.io
+OPENAI_API_KEY=your_nine_router_api_key_here
+OPENAI_BASE_URL=https://api.9router.io
 
 # GitHub (optional — only if testing GitHub webhooks)
 GITHUB_WEBHOOK_SECRET=your_local_test_secret
@@ -188,7 +188,7 @@ curl -s -X POST http://localhost:3000/webhooks/github \
 | `ECONNREFUSED 127.0.0.1:6379` | Redis not running | Start Redis with `docker run` (step 4) |
 | `Cannot find module 'dist/...'` | Project not built | Run `pnpm build` |
 | Worker exits immediately | `REDIS_URL` incorrect | Check `.env`, verify `redis-cli ping` |
-| `NINE_ROUTER_API_KEY` error | Missing env var | Add key to `.env` |
+| `OPENAI_API_KEY` error | Missing env var | Add key to `.env` |
 
 ---
 

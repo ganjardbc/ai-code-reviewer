@@ -130,17 +130,17 @@ Temperature is set to **0.1**, which keeps responses highly deterministic and fa
 
 ## Model Selection
 
-The model identifier `opencode` is sent to 9Router, which resolves it to the actual OpenCode backend. If 9Router maps a different model ID in your environment, update `NineRouterService`:
+The model identifier `opencode` is sent to 9Router, which resolves it to the actual OpenCode backend. If 9Router maps a different model ID in your environment, update `OpenAiCompatibleService`:
 
 ```typescript
-// src/infrastructure/ai/nine-router.service.ts
+// src/infrastructure/ai/openai-compatible.service.ts
 const payload: ChatRequest = {
   model: 'opencode',   // Change this if 9Router uses a different alias
   ...
 };
 ```
 
-The model name is not currently exposed as an environment variable. Adding `NINE_ROUTER_MODEL` to the config schema and reading it here would allow runtime configuration without code changes.
+The model name is not currently exposed as an environment variable. Adding `OPENAI_MODEL` to the config schema and reading it here would allow runtime configuration without code changes.
 
 ---
 
@@ -164,7 +164,7 @@ The parser does not currently enforce that `lineNumber` falls within the diff. I
 
 ### Timeout errors
 
-The HTTP client has a 120-second timeout. If OpenCode is slow under load, increase `timeout` in `NineRouterService` or raise worker retry delays in BullMQ.
+The HTTP client has a 120-second timeout. If OpenCode is slow under load, increase `timeout` in `OpenAiCompatibleService` or raise worker retry delays in BullMQ.
 
 ### `AiProviderError: 9Router rate limit exceeded`
 

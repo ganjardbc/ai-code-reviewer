@@ -7,7 +7,7 @@ const aiRunners = ['direct', 'opencode'] as const;
 const boolEnvVar = (defaultVal: 'true' | 'false' = 'true') =>
   z.enum(['true', 'false', '1', '0']).default(defaultVal).transform(v => v === 'true' || v === '1');
 
-export const configSchema = z.object({
+const baseSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   NODE_ENV: z.enum(nodeEnvs).default('development'),
   LOG_LEVEL: z.enum(logLevels).default('info'),
@@ -16,13 +16,15 @@ export const configSchema = z.object({
 
   AI_RUNNER: z.enum(aiRunners).default('direct'),
 
-  NINE_ROUTER_API_KEY: z.string().min(1, 'NINE_ROUTER_API_KEY cannot be empty').optional(),
-  NINE_ROUTER_BASE_URL: z
-    .url({ message: 'NINE_ROUTER_BASE_URL must be a valid URL' })
-    .default('https://api.9router.com/v1'),
-  NINE_ROUTER_MODEL: z
+  // Any OpenAI-compatible Chat Completions endpoint (OpenAI, 9Router, OpenRouter, Ollama, ...).
+  OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY cannot be empty').optional(),
+  // No default: guessing an endpoint would send the API key to the wrong vendor.
+  OPENAI_BASE_URL: z
+    .url({ message: 'OPENAI_BASE_URL must be a valid URL' })
+    .optional(),
+  OPENAI_MODEL: z
     .string()
-    .default('opencode'),
+    .default('gpt-4o-mini'),
 
   OPENCODE_COMMAND: z.string().default('opencode'),
   OPENCODE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
@@ -60,11 +62,18 @@ export const configSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
   TELEGRAM_CHAT_ID: z.string().min(1).optional(),
 }).superRefine((data, ctx) => {
-  if (data.AI_RUNNER === 'direct' && !data.NINE_ROUTER_API_KEY) {
+  if (data.AI_RUNNER === 'direct' && !data.OPENAI_API_KEY) {
     ctx.addIssue({
       code: 'custom' as const,
-      path: ['NINE_ROUTER_API_KEY'],
-      message: 'NINE_ROUTER_API_KEY is required when AI_RUNNER=direct',
+      path: ['OPENAI_API_KEY'],
+      message: 'OPENAI_API_KEY is required when AI_RUNNER=direct',
+    });
+  }
+  if (data.AI_RUNNER === 'direct' && !data.OPENAI_BASE_URL) {
+    ctx.addIssue({
+      code: 'custom' as const,
+      path: ['OPENAI_BASE_URL'],
+      message: 'OPENAI_BASE_URL is required when AI_RUNNER=direct (e.g. https://api.openai.com/v1)',
     });
   }
   const hasToken = !!data.TELEGRAM_BOT_TOKEN;
@@ -78,5 +87,33 @@ export const configSchema = z.object({
     });
   }
 });
+
+export const LEGACY_AI_ENV_KEYS = {
+  NINE_ROUTER_API_KEY: 'OPENAI_API_KEY',
+  NINE_ROUTER_BASE_URL: 'OPENAI_BASE_URL',
+  NINE_ROUTER_MODEL: 'OPENAI_MODEL',
+} as const;
+
+// Deprecated NINE_ROUTER_* names still work as a fallback; OPENAI_* wins when
+// both are set. A deployment that only set NINE_ROUTER_API_KEY relied on the
+// old 9Router defaults for base URL and model, so those are kept for it.
+// Empty values (`OPENAI_API_KEY=` left blank in .env) count as unset so they
+// neither block the fallback nor override a default.
+function applyLegacyAiEnv(input: unknown): unknown {
+  if (typeof input !== 'object' || input === null) return input;
+  const env: Record<string, unknown> = { ...input };
+  for (const key of [...Object.keys(LEGACY_AI_ENV_KEYS), ...Object.values(LEGACY_AI_ENV_KEYS)]) {
+    if (env[key] === '') delete env[key];
+  }
+  const legacyOnly = env['OPENAI_API_KEY'] === undefined && env['NINE_ROUTER_API_KEY'] !== undefined;
+
+  env['OPENAI_API_KEY'] ??= env['NINE_ROUTER_API_KEY'];
+  env['OPENAI_BASE_URL'] ??=
+    env['NINE_ROUTER_BASE_URL'] ?? (legacyOnly ? 'https://api.9router.com/v1' : undefined);
+  env['OPENAI_MODEL'] ??= env['NINE_ROUTER_MODEL'] ?? (legacyOnly ? 'opencode' : undefined);
+  return env;
+}
+
+export const configSchema = z.preprocess(applyLegacyAiEnv, baseSchema);
 
 export type AppConfig = z.infer<typeof configSchema>;

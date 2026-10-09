@@ -1,1 +1,1 @@
-export { NineRouterService as DirectApiRunner } from './nine-router.service.js';
+export { OpenAiCompatibleService as DirectApiRunner } from './openai-compatible.service.js';

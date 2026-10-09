@@ -131,7 +131,7 @@ Job dequeued from BullMQ
   |     - Enforce 40 KB size limit — abort if exceeded
   |
   +-- POST filtered diff to 9Router API
-  |     Headers: Authorization: Bearer NINE_ROUTER_API_KEY
+  |     Headers: Authorization: Bearer OPENAI_API_KEY
   |     Body:    { model, messages: [{ role: "user", content: diff }] }
   |
   +-- Parse response:

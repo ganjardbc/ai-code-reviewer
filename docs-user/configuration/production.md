@@ -33,7 +33,7 @@ Inject secrets at container start via an init script in your ECS task definition
 backed SSM sidecar:
 
 ```bash
-export NINE_ROUTER_API_KEY=$(aws secretsmanager get-secret-value \
+export OPENAI_API_KEY=$(aws secretsmanager get-secret-value \
   --secret-id /ai-code-reviewer/prod/nine-router-api-key \
   --query SecretString --output text)
 ```
@@ -51,7 +51,7 @@ metadata:
   namespace: ai-code-reviewer
 type: Opaque
 stringData:
-  NINE_ROUTER_API_KEY: "YOUR_KEY"
+  OPENAI_API_KEY: "YOUR_KEY"
   GITHUB_ACCESS_TOKEN: "YOUR_TOKEN"
   GITLAB_ACCESS_TOKEN: "YOUR_TOKEN"
   GITHUB_WEBHOOK_SECRET: "YOUR_SECRET"

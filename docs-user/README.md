@@ -53,7 +53,7 @@ pnpm install
 
 # 3. Configure environment
 cp .env.example .env
-# Edit .env — fill in NINE_ROUTER_API_KEY, GITHUB_ACCESS_TOKEN, etc.
+# Edit .env — fill in OPENAI_API_KEY, GITHUB_ACCESS_TOKEN, etc.
 
 # 4. Build and start
 pnpm build
@@ -78,7 +78,7 @@ For a guided walkthrough, see [Quick Start](getting-started/quick-start.md).
 | Redis | 7.x | Queue + job state |
 | Git | 2.x | Repo cloning |
 | Docker | 24.x | Optional — production deployments |
-| 9Router API | — | AI gateway; requires `NINE_ROUTER_API_KEY` |
+| 9Router API | — | AI gateway; requires `OPENAI_API_KEY` |
 | GitHub / GitLab | — | Network access for posting comments |
 
 See [Requirements](getting-started/requirements.md) for the full prerequisites table.

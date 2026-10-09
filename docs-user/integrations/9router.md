@@ -17,14 +17,14 @@ Benefits of this architecture:
 
 | Variable | Description | Example |
 |---|---|---|
-| `NINE_ROUTER_API_KEY` | Bearer token for authenticating with 9Router | `9r_live_xxxxxxxxxxxx` |
-| `NINE_ROUTER_BASE_URL` | Base URL of your 9Router instance | `https://api.9router.com/v1` |
+| `OPENAI_API_KEY` | Bearer token for authenticating with 9Router | `9r_live_xxxxxxxxxxxx` |
+| `OPENAI_BASE_URL` | Base URL of your 9Router instance | `https://api.9router.com/v1` |
 
-The default value for `NINE_ROUTER_BASE_URL` is `https://api.9router.com/v1`. Override it if you are running a self-hosted 9Router or a staging gateway.
+`OPENAI_BASE_URL` has no default and must be set when `AI_RUNNER=direct`. Use `https://api.9router.com/v1` for hosted 9Router, or your own URL for a self-hosted or staging gateway.
 
 ```env
-NINE_ROUTER_API_KEY=9r_live_xxxxxxxxxxxx
-NINE_ROUTER_BASE_URL=https://api.9router.com/v1
+OPENAI_API_KEY=9r_live_xxxxxxxxxxxx
+OPENAI_BASE_URL=https://api.9router.com/v1
 ```
 
 ---
@@ -34,8 +34,8 @@ NINE_ROUTER_BASE_URL=https://api.9router.com/v1
 9Router implements the OpenAI Chat Completions API. The reviewer uses:
 
 ```
-POST {NINE_ROUTER_BASE_URL}/chat/completions
-Authorization: Bearer {NINE_ROUTER_API_KEY}
+POST {OPENAI_BASE_URL}/chat/completions
+Authorization: Bearer {OPENAI_API_KEY}
 Content-Type: application/json
 ```
 
@@ -72,7 +72,7 @@ Response shape (standard OpenAI format):
 
 The reviewer sends `"model": "opencode"` to 9Router. 9Router is responsible for resolving this alias to an actual model backend. Consult your 9Router configuration to see which model `opencode` maps to, or change the alias your 9Router is configured to expose.
 
-To use a different model alias without modifying source code, update `NINE_ROUTER_MODEL` in your environment (requires adding this variable to the config schema) and pass it in `NineRouterService`.
+To use a different model alias without modifying source code, update `OPENAI_MODEL` in your environment (requires adding this variable to the config schema) and pass it in `OpenAiCompatibleService`.
 
 ---
 
@@ -98,8 +98,8 @@ When a job exhausts its retry budget (default: 3 attempts), it moves to BullMQ's
 |---|---|---|
 | 429 | Too many concurrent review requests | Reduce `WORKER_CONCURRENCY`; add backoff |
 | 503 | 9Router or the upstream model is down | Check 9Router status; the reviewer will retry |
-| 401/403 | `NINE_ROUTER_API_KEY` wrong or expired | Rotate the key and update `NINE_ROUTER_API_KEY` |
-| 408/timeout | Model took > 120 s | Increase `timeout` in `NineRouterService`; check model latency |
+| 401/403 | `OPENAI_API_KEY` wrong or expired | Rotate the key and update `OPENAI_API_KEY` |
+| 408/timeout | Model took > 120 s | Increase `timeout` in `OpenAiCompatibleService`; check model latency |
 
 ---
 
@@ -114,8 +114,8 @@ No reviewer-side changes are needed to benefit from 9Router failover.
 ## Verifying Connectivity
 
 ```bash
-curl -s -X POST "${NINE_ROUTER_BASE_URL}/chat/completions" \
-  -H "Authorization: Bearer ${NINE_ROUTER_API_KEY}" \
+curl -s -X POST "${OPENAI_BASE_URL}/chat/completions" \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"model":"opencode","messages":[{"role":"user","content":"Say OK"}],"max_tokens":5}' \
   | jq '.choices[0].message.content'
@@ -127,10 +127,10 @@ Expected output: `"OK"` (or similar). If this fails, resolve 9Router connectivit
 
 ## Self-Hosted 9Router
 
-If you run 9Router on-premises, set `NINE_ROUTER_BASE_URL` to your internal URL:
+If you run 9Router on-premises, set `OPENAI_BASE_URL` to your internal URL:
 
 ```env
-NINE_ROUTER_BASE_URL=http://9router.internal:8080/v1
+OPENAI_BASE_URL=http://9router.internal:8080/v1
 ```
 
 Ensure the reviewer container can reach 9Router. In Docker Compose, put both services on the same network:

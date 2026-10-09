@@ -128,7 +128,7 @@ Valid values (in ascending verbosity): `trace`, `debug`, `info`, `warn`, `error`
 - Never commit secrets to version control. Use `.env` files only for local development and exclude them via `.gitignore`.
 - In Docker Compose, use the `secrets` top-level key or load env from a secrets manager.
 - In Kubernetes, use `Secret` objects mounted as environment variables (not embedded in `ConfigMap`).
-- Rotate `NINE_ROUTER_API_KEY` if you suspect it has been compromised.
+- Rotate `OPENAI_API_KEY` if you suspect it has been compromised.
 
 ---
 

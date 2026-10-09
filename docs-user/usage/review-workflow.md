@@ -99,7 +99,7 @@ git diff <baseRef> <headRef>
 
 ### 6. AI Review
 
-`NineRouterService.review(prompt)` sends the prompt to 9Router. The request has a 120-second timeout. The `response_format: json_object` parameter instructs OpenCode to return only valid JSON.
+`OpenAiCompatibleService.review(prompt)` sends the prompt to 9Router. The request has a 120-second timeout. The `response_format: json_object` parameter instructs OpenCode to return only valid JSON.
 
 ### 7. Parse and Validate
 

@@ -30,7 +30,7 @@ The worker process makes outbound HTTPS connections to the following external se
 
 | Service | URL / Domain | Purpose | Credential |
 |---|---|---|---|
-| 9Router API | `NINE_ROUTER_BASE_URL` (e.g., `https://api.9router.com/v1`) | Sends diffs for AI review, receives structured comment JSON | `NINE_ROUTER_API_KEY` |
+| 9Router API | `OPENAI_BASE_URL` (e.g., `https://api.9router.com/v1`) | Sends diffs for AI review, receives structured comment JSON | `OPENAI_API_KEY` |
 | GitHub API | `https://api.github.com` | Posts inline review comments on pull requests | `GITHUB_ACCESS_TOKEN` |
 | GitLab API | Your GitLab instance (self-managed or `https://gitlab.com`) | Posts inline review comments on merge requests | `GITLAB_ACCESS_TOKEN` |
 | GitHub / GitLab (clone) | Source repository host | Clones the repository to generate the diff | Same access token as above |
@@ -41,8 +41,8 @@ The worker process makes outbound HTTPS connections to the following external se
 
 Before starting the service you need the following credentials in hand:
 
-- [ ] **9Router API key** — obtain from your 9Router account dashboard; set as `NINE_ROUTER_API_KEY`
-- [ ] **9Router base URL** — the API endpoint root; set as `NINE_ROUTER_BASE_URL`
+- [ ] **9Router API key** — obtain from your 9Router account dashboard; set as `OPENAI_API_KEY`
+- [ ] **9Router base URL** — the API endpoint root; set as `OPENAI_BASE_URL`
 - [ ] **GitHub personal access token** — requires `repo` scope (to clone private repos and post comments); set as `GITHUB_ACCESS_TOKEN`
 - [ ] **GitHub webhook secret** — a random string you choose and configure on both the GitHub webhook and in `.env`; set as `GITHUB_WEBHOOK_SECRET`
 - [ ] **GitLab personal access token** — requires `api` scope; set as `GITLAB_ACCESS_TOKEN`
